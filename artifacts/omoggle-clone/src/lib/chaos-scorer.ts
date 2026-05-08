@@ -147,6 +147,8 @@ export interface TemporalFeatures {
   expressionVolatility: number; // variance of spatial features over window
   motionInstability: number;    // landmark velocity
   commitment: number;           // sustained high chaos
+  momentum: number;             // 0..1 — chaos is escalating over time
+  peak: number;                 // 0..1 — instantaneous burst intensity
 }
 
 const WINDOW = 30; // ~1s @ 30fps
@@ -201,10 +203,22 @@ export class TemporalTracker {
     if (this.chaosHistory.length > WINDOW) this.chaosHistory.shift();
     const sustained =
       this.chaosHistory.reduce((s, v) => s + v, 0) / this.chaosHistory.length;
-    // commitment rewards staying above 0.4 across the window
-    const commitment = clamp01(norm(sustained, 0.3, 0.75));
+    // commitment rewards staying chaotic — easier to reach now
+    const commitment = clamp01(norm(sustained, 0.18, 0.6));
 
-    return { expressionVolatility, motionInstability, commitment };
+    // momentum: compare recent half of window vs older half. positive slope = ramping up
+    const half = Math.max(2, Math.floor(this.chaosHistory.length / 2));
+    const older = this.chaosHistory.slice(0, half);
+    const recent = this.chaosHistory.slice(-half);
+    const olderMean = older.reduce((s, v) => s + v, 0) / Math.max(older.length, 1);
+    const recentMean = recent.reduce((s, v) => s + v, 0) / Math.max(recent.length, 1);
+    const slope = recentMean - olderMean;
+    const momentum = clamp01(norm(slope, 0.0, 0.25));
+
+    // peak: how high is the current frame vs the recent baseline
+    const peak = clamp01(norm(instantChaos - sustained * 0.7, 0.05, 0.45));
+
+    return { expressionVolatility, motionInstability, commitment, momentum, peak };
   }
 
   reset() {
@@ -290,20 +304,19 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // Static face-shape signals get less weight (too easy to exploit by
-  // sitting still with an asymmetric face). Performance signals get more.
-  asymmetry: 0.45,
-  mouthDistortion: 1.4,
-  eyeChaos: 1.1,
-  chinCompression: 0.9,
-  headAngle: 0.7,
-  expressionVolatility: 1.7,
-  motionInstability: 1.4,
-  audioEnergy: 1.1,
-  audioPitch: 0.6,
-  audioEntropy: 0.4,
-  audioSpike: 0.6,
-  commitment: 1.9,
+  // Reward ACTION over face structure. Performance signals dominate.
+  asymmetry: 0.25,
+  mouthDistortion: 1.8,
+  eyeChaos: 1.4,
+  chinCompression: 0.7,
+  headAngle: 0.6,
+  expressionVolatility: 2.2,
+  motionInstability: 1.9,
+  audioEnergy: 1.6,
+  audioPitch: 0.9,
+  audioEntropy: 0.5,
+  audioSpike: 1.0,
+  commitment: 2.4,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -331,18 +344,34 @@ export function scoreFromFeatures(
     w.audioSpike * a.spike +
     w.commitment * t.commitment;
 
-  // Slight exaggeration curve — entertainment > accuracy.
+  // Step 1: aggressive non-linear rescale — pulls mid-range up sharply.
   const norm01 = clamp01(raw / weightSum);
-  const exaggerated = Math.pow(norm01, 0.78);
-  const target = exaggerated * 10;
+  let curved = Math.pow(norm01, 0.55);
 
-  // Asymmetric smoothing + spike clamp: react fast on sustained increases,
-  // fall slowly so brief noise spikes don't whiplash the score.
+  // Step 2: top-end amplification — high performance feels explosive.
+  if (curved > 0.6) curved *= 1.25;
+  if (curved > 0.78) curved *= 1.18;
+
+  // Step 3: momentum + peak boosts — escalation and burst frames pop.
+  curved += 0.18 * t.momentum;
+  curved += 0.12 * t.peak;
+
+  // Step 4: commitment bonus — sustained intensity gets a flat reward.
+  if (t.commitment > 0.55) curved += 0.08 + 0.12 * (t.commitment - 0.55);
+
+  const target = clamp01(curved) * 10;
+
+  // Smoothing — fast rise, slow fall, but allow peaks to punch through.
   const delta = target - prevScore;
-  const maxJump = 1.2;            // hard cap per-frame jump (out of 10)
-  const clamped = Math.max(-maxJump, Math.min(maxJump, delta));
-  const alpha = clamped > 0 ? 0.22 : 0.12;
-  const score = prevScore + clamped * alpha;
+  const maxJumpUp = 2.2;   // bigger room for hype spikes
+  const maxJumpDn = 0.9;   // gentler decay
+  const clamped = delta > 0
+    ? Math.min(maxJumpUp, delta)
+    : Math.max(-maxJumpDn, delta);
+  const alpha = clamped > 0 ? 0.42 : 0.14;
+  let score = prevScore + clamped * alpha;
+  if (score < 0) score = 0;
+  if (score > 10) score = 10;
 
   return { spatial: s, temporal: t, audio: a, score };
 }
