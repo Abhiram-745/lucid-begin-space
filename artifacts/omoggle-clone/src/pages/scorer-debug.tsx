@@ -156,8 +156,8 @@ export default function ScorerDebug() {
 
           let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
           if (analyser && timeBufRef.current && freqBufRef.current) {
-            analyser.getFloatTimeDomainData(timeBufRef.current);
-            analyser.getByteFrequencyData(freqBufRef.current);
+            analyser.getFloatTimeDomainData(timeBufRef.current as Float32Array<ArrayBuffer>);
+            analyser.getByteFrequencyData(freqBufRef.current as Uint8Array<ArrayBuffer>);
             audio = audioTrackerRef.current.update(
               timeBufRef.current,
               freqBufRef.current,
