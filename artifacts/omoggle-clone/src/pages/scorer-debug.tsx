@@ -614,6 +614,7 @@ export default function ScorerDebug() {
                   <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} />
                   <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} />
                   <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
+                  <Bar label="Skin texture (TF.js)" value={skinRoughness} />
                 </div>
               </div>
 
