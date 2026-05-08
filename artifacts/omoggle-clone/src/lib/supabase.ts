@@ -8,5 +8,21 @@ export const hasSupabaseConfig = Boolean(
 );
 
 export const supabase = hasSupabaseConfig
-  ? createClient(supabaseUrl, supabasePublishableKey)
+  ? createClient(supabaseUrl, supabasePublishableKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+      realtime: { params: { eventsPerSecond: 20 } },
+    })
   : null;
+
+/** Sign in anonymously if no session exists. Returns the user id, or null if anon auth is disabled. */
+export async function ensureAuth(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data: existing } = await supabase.auth.getSession();
+  if (existing.session?.user) return existing.session.user.id;
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    console.warn("Anonymous auth failed — enable it in Supabase dashboard.", error.message);
+    return null;
+  }
+  return data.user?.id ?? null;
+}
