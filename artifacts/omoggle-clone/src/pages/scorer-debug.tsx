@@ -85,17 +85,17 @@ function strokeSmooth(ctx: CanvasRenderingContext2D, pts: { x: number; y: number
   ctx.stroke();
 }
 
-function Bar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
+function Bar({ label, value, na = false }: { label: string; value: number; na?: boolean }) {
+  const pct = na ? 0 : Math.round(value * 100);
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-[10px] font-black uppercase tracking-[0.2em]">
         <span className="text-white/55">{label}</span>
-        <span className="text-white tabular-nums">{pct}</span>
+        <span className={`tabular-nums ${na ? "text-white/30" : "text-white"}`}>{na ? "N/A" : pct}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#a855f7,#f43f5e)] transition-[width] duration-100"
+          className={`h-full rounded-full transition-[width] duration-100 ${na ? "bg-white/15" : "bg-[linear-gradient(90deg,#22d3ee,#a855f7,#f43f5e)]"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -245,7 +245,10 @@ export default function ScorerDebug() {
           }
           bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
         }
-        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.04; // ~20% wide
+        // Lower bar: MediaPipe returns 478 landmarks when it sees a face,
+        // so any landmarks at all means we have one. Bbox ≥ ~12% width is
+        // enough to score reliably; smaller faces just dampen confidence.
+        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.015;
         if (faceConfident && lm) {
           noFaceFramesRef.current = 0;
           if (!hasFace) setHasFace(true);
@@ -266,11 +269,11 @@ export default function ScorerDebug() {
           }
 
           // Confidence proxy: bbox size (bigger = closer = more reliable)
-          // tempered by motion stability (very shaky landmarks => less
-          // trustworthy frame).
-          const sizeConf = Math.min(1, bboxArea / 0.18);
-          const motionPenalty = Math.min(0.4, temporal.motionInstability * 0.6);
-          const confidence = Math.max(0.25, sizeConf - motionPenalty);
+          // tempered by motion stability. Floor at 0.5 so a normal-distance
+          // face never gets its score crushed.
+          const sizeConf = Math.min(1, bboxArea / 0.10);
+          const motionPenalty = Math.min(0.3, temporal.motionInstability * 0.4);
+          const confidence = Math.max(0.5, sizeConf - motionPenalty);
 
           const result2 = scoreFromFeatures(
             spatial,
@@ -292,7 +295,7 @@ export default function ScorerDebug() {
           const t = Math.min(1, result2.score / 10);
           const time = performance.now() / 1000;
 
-          // 1. Face bounding box (for scan line + framing brackets)
+          // 1. Face bounding box (used by skin sampler + node placement)
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
           for (const p of lm) {
             if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
@@ -300,27 +303,6 @@ export default function ScorerDebug() {
           }
           const bx = minX * w, by = minY * h;
           const bw = (maxX - minX) * w, bh = (maxY - minY) * h;
-          const padX = bw * 0.12, padY = bh * 0.10;
-
-          // 2. Corner brackets
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = chaosColor(t, 0.85);
-          ctx.shadowColor = chaosColor(t, 0.9);
-          ctx.shadowBlur = 10 + t * 18;
-          const bracket = Math.min(bw, bh) * 0.18;
-          const bx0 = bx - padX, by0 = by - padY;
-          const bx1 = bx + bw + padX, by1 = by + bh + padY;
-          const corners: Array<[number, number, number, number]> = [
-            [bx0, by0, +1, +1], [bx1, by0, -1, +1],
-            [bx0, by1, +1, -1], [bx1, by1, -1, -1],
-          ];
-          for (const [cx0, cy0, sx, sy] of corners) {
-            ctx.beginPath();
-            ctx.moveTo(cx0, cy0 + sy * bracket);
-            ctx.lineTo(cx0, cy0);
-            ctx.lineTo(cx0 + sx * bracket, cy0);
-            ctx.stroke();
-          }
 
           // 3. FULL TRIANGULATED FACE MESH (FACEMESH_TESSELATION)
           //    Drawn first, low opacity, glow scales with score.
@@ -386,29 +368,6 @@ export default function ScorerDebug() {
             ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = chaosColor(t, 1);
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-          }
-
-          // 6. Horizontal scan line sweeping across face bbox
-          const sweep = (Math.sin(time * 1.3) * 0.5 + 0.5);
-          const scanY = by0 + sweep * (by1 - by0);
-          const grad = ctx.createLinearGradient(bx0, scanY, bx1, scanY);
-          grad.addColorStop(0, chaosColor(t, 0));
-          grad.addColorStop(0.5, chaosColor(t, 0.9));
-          grad.addColorStop(1, chaosColor(t, 0));
-          ctx.shadowBlur = 18 + t * 22;
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(bx0, scanY);
-          ctx.lineTo(bx1, scanY);
-          ctx.stroke();
-
-          // 7. High-chaos glitch tear
-          if (t > 0.7 && Math.random() < 0.25) {
-            const ty = by0 + Math.random() * (by1 - by0);
-            ctx.fillStyle = chaosColor(t, 0.18);
-            ctx.shadowBlur = 0;
-            ctx.fillRect(bx0, ty, bx1 - bx0, 2);
           }
 
           ctx.shadowBlur = 0;
@@ -534,34 +493,33 @@ export default function ScorerDebug() {
               </div>
             )}
 
-            {/* Scan readouts */}
-            {hasFace && breakdown && breakdown.readouts && breakdown.emotion && breakdown.structure && (
-              <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
-                <ReadoutRow
-                  label="Chaos Energy"
-                  value={breakdown.readouts.chaosEnergy}
-                  tone={breakdown.chaosEnergy ?? 0}
-                />
-                <ReadoutRow
-                  label="Emotional Signal"
-                  value={breakdown.readouts.emotion}
-                  tone={breakdown.emotion.intensity ?? 0}
-                />
-                <ReadoutRow
-                  label="Performance"
-                  value={breakdown.readouts.performance}
-                  tone={Math.min(1, score / 10)}
-                />
-                <ReadoutRow
-                  label="Facial Deviation"
-                  value={`${breakdown.readouts.deviation}%`}
-                  tone={breakdown.structure.inversion ?? 0}
-                />
-                <div className="pt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/30">
-                  Simulated · entertainment only
-                </div>
+            {/* Scan readouts — always rendered; values fall back to N/A
+                when no face is present so the panel doesn't pop in/out. */}
+            <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
+              <ReadoutRow
+                label="Chaos Energy"
+                value={hasFace && breakdown ? breakdown.readouts.chaosEnergy : "N/A"}
+                tone={hasFace && breakdown ? breakdown.chaosEnergy : 0}
+              />
+              <ReadoutRow
+                label="Emotional Signal"
+                value={hasFace && breakdown ? breakdown.readouts.emotion : "N/A"}
+                tone={hasFace && breakdown ? breakdown.emotion.intensity : 0}
+              />
+              <ReadoutRow
+                label="Performance"
+                value={hasFace && breakdown ? breakdown.readouts.performance : "N/A"}
+                tone={hasFace ? Math.min(1, score / 10) : 0}
+              />
+              <ReadoutRow
+                label="Facial Deviation"
+                value={hasFace && breakdown ? `${breakdown.readouts.deviation}%` : "N/A"}
+                tone={hasFace && breakdown ? breakdown.structure.inversion : 0}
+              />
+              <div className="pt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/30">
+                Simulated · entertainment only
               </div>
-            )}
+            </div>
 
             {error && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
@@ -595,11 +553,11 @@ export default function ScorerDebug() {
                   Spatial · facial geometry
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} />
-                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
-                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} />
-                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} />
-                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} />
+                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} na={!hasFace} />
+                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} na={!hasFace} />
+                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} na={!hasFace} />
+                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} na={!hasFace} />
+                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -608,9 +566,9 @@ export default function ScorerDebug() {
                   Temporal · motion over time
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} />
-                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} />
-                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} />
+                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} na={!hasFace} />
+                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} na={!hasFace} />
+                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -619,10 +577,10 @@ export default function ScorerDebug() {
                   Audio · vocal disruption
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} />
-                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} />
-                  <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} />
-                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} />
+                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} na={!hasFace} />
+                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} na={!hasFace} />
+                  <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} na={!hasFace} />
+                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -631,12 +589,12 @@ export default function ScorerDebug() {
                   Perceived emotion · simulated
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Surprise" value={breakdown?.emotion?.surprise ?? 0} />
-                  <Bar label="Anger tension" value={breakdown?.emotion?.anger ?? 0} />
-                  <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} />
-                  <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} />
-                  <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
-                  <Bar label="Skin texture (TF.js)" value={skinRoughness} />
+                  <Bar label="Surprise" value={breakdown?.emotion?.surprise ?? 0} na={!hasFace} />
+                  <Bar label="Anger tension" value={breakdown?.emotion?.anger ?? 0} na={!hasFace} />
+                  <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} na={!hasFace} />
+                  <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} na={!hasFace} />
+                  <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} na={!hasFace} />
+                  <Bar label="Skin texture (TF.js)" value={skinRoughness} na={!hasFace} />
                 </div>
               </div>
 
@@ -645,9 +603,9 @@ export default function ScorerDebug() {
                   Structural inversion · low weight
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Aesthetic deviation" value={breakdown?.structure ? 1 - breakdown.structure.symmetryIdeal : 0} />
-                  <Bar label="Ratio mismatch" value={breakdown?.structure?.ratioDeviation ?? 0} />
-                  <Bar label="Cantal tilt deviation" value={breakdown?.structure?.cantalDeviation ?? 0} />
+                  <Bar label="Aesthetic deviation" value={breakdown?.structure ? 1 - breakdown.structure.symmetryIdeal : 0} na={!hasFace} />
+                  <Bar label="Ratio mismatch" value={breakdown?.structure?.ratioDeviation ?? 0} na={!hasFace} />
+                  <Bar label="Cantal tilt deviation" value={breakdown?.structure?.cantalDeviation ?? 0} na={!hasFace} />
                 </div>
               </div>
             </div>
