@@ -601,7 +601,7 @@ export function scoreFromFeatures(
     0.06 * f.teethExposure
   );
 
-  const combined = clamp01(0.22 + 0.95 * badChaos - 0.35 * goodAesthetic);
+  const combined = clamp01(0.30 + 1.00 * badChaos - 0.22 * goodAesthetic);
 
   // Sigmoid keeps the curve bounded and removes the aggressive multipliers.
   let target01 = sigmoid01(combined, 5.2, 0.34);
