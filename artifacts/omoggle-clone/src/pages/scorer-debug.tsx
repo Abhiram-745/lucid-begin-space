@@ -6,6 +6,8 @@ import {
   AudioTracker,
   TemporalTracker,
   extractSpatial,
+  extractEmotion,
+  extractStructure,
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
@@ -202,6 +204,8 @@ export default function ScorerDebug() {
         const lm = result.faceLandmarks?.[0];
         if (lm) {
           const spatial = extractSpatial(lm);
+          const emotion = extractEmotion(lm);
+          const structure = extractStructure(lm);
           const temporal = temporalRef.current.update(spatial, lm);
 
           let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
@@ -221,6 +225,8 @@ export default function ScorerDebug() {
             audio,
             undefined,
             prevScoreRef.current,
+            emotion,
+            structure,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
