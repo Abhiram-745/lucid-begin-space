@@ -98,6 +98,8 @@ export default function ScorerDebug() {
   const [micReady, setMicReady] = useState(false);
   const [error, setError] = useState("");
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
+  const [hasFace, setHasFace] = useState(false);
+  const noFaceFramesRef = useRef(0);
 
   /* Load MediaPipe */
   useEffect(() => {
@@ -203,6 +205,8 @@ export default function ScorerDebug() {
         const result = landmarker.detectForVideo(video, performance.now());
         const lm = result.faceLandmarks?.[0];
         if (lm) {
+          noFaceFramesRef.current = 0;
+          if (!hasFace) setHasFace(true);
           const spatial = extractSpatial(lm);
           const emotion = extractEmotion(lm);
           const structure = extractStructure(lm);
@@ -343,6 +347,14 @@ export default function ScorerDebug() {
           }
 
           ctx.shadowBlur = 0;
+        }
+        else {
+          noFaceFramesRef.current += 1;
+          // Tolerate brief drops (~10 frames) before hiding the score box.
+          if (noFaceFramesRef.current > 10 && hasFace) {
+            setHasFace(false);
+            prevScoreRef.current = 0;
+          }
         }
       } catch {
         // skip frame
