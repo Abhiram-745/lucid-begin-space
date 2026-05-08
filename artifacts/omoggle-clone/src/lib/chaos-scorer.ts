@@ -32,6 +32,11 @@ const L = {
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const avgPt = (...pts: Pt[]): Pt => ({
+  x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+  y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+  z: pts.reduce((s, p) => s + (p.z ?? 0), 0) / pts.length,
+});
 
 /** Map a raw measurement into [0,1] with a soft saturating curve. */
 const norm = (v: number, lo: number, hi: number) => clamp01((v - lo) / (hi - lo));
@@ -54,8 +59,8 @@ export interface NormalizedFace {
 }
 
 export function normalizeLandmarks(lm: Pt[]): NormalizedFace {
-  const lEye = lm[L.leftEyeOut];
-  const rEye = lm[L.rightEyeOut];
+  const lEye = avgPt(lm[L.leftEyeOut], lm[L.leftEyeIn], lm[L.leftEyeTop], lm[L.leftEyeBot]);
+  const rEye = avgPt(lm[L.rightEyeOut], lm[L.rightEyeIn], lm[L.rightEyeTop], lm[L.rightEyeBot]);
   const eyeSpan = dist(lEye, rEye) || 1e-6;
   const cx = (lm[L.foreheadCenter].x + lm[L.chin].x) / 2;
   const cy = (lm[L.foreheadCenter].y + lm[L.chin].y) / 2;
