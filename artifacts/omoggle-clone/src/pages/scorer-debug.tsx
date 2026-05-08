@@ -423,11 +423,12 @@ export default function ScorerDebug() {
         }
         else {
           noFaceFramesRef.current += 1;
-          // Gradual decay (×0.9 / frame) instead of an instant drop, then
-          // hide the score box after a short tolerance window.
+          // Hide all readouts quickly when MediaPipe loses the face. Keep a
+          // tiny 2-frame grace period only to avoid one-frame detector flicker.
           prevScoreRef.current = prevScoreRef.current * 0.9;
-          if (noFaceFramesRef.current > 12 && hasFaceRef.current) {
+          if (noFaceFramesRef.current > 2 && hasFaceRef.current) {
             hasFaceRef.current = false;
+            prevScoreRef.current = 0;
             setHasFace(false);
             setBreakdown(null);
             setSkinRoughness(0);
