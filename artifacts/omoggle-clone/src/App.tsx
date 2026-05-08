@@ -8,6 +8,7 @@ import Leaderboard from "@/pages/leaderboard";
 import Arena from "@/pages/arena";
 import LiveArena from "@/pages/live-arena";
 import Profile from "@/pages/profile";
+import ScorerDebug from "@/pages/scorer-debug";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/arena/1v1" component={LiveArena} />
       <Route path="/arena" component={Arena} />
       <Route path="/profile" component={Profile} />
+      <Route path="/scorer" component={ScorerDebug} />
       <Route component={NotFound} />
     </Switch>
   );
