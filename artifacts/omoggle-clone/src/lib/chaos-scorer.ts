@@ -533,6 +533,7 @@ export function scoreFromFeatures(
   e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
   skinRoughness = 0,
+  dentalSignal = 0,
   /** 0..1 — multiplied into the final score. Low = no face / unstable. */
   confidence = 1,
 ): ChaosBreakdown {
@@ -597,8 +598,9 @@ export function scoreFromFeatures(
     0.52 * performance +
     0.26 * structural +
     0.08 * e.intensity +
-    0.08 * skinRoughness +
-    0.06 * f.teethExposure
+    0.06 * skinRoughness +
+    0.06 * dentalSignal +
+    0.02 * f.teethExposure
   );
 
   const combined = clamp01(0.30 + 1.00 * badChaos - 0.22 * goodAesthetic);
