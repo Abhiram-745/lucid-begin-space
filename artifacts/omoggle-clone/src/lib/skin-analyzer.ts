@@ -36,6 +36,12 @@ export interface SkinReading {
   rawEnergy: number;   // mean abs Laplacian, pre-normalization
 }
 
+export interface TeethReading {
+  visibility: number;  // 0..1 bright low-saturation mouth-region pixels
+  yellowTint: number;  // 0..1 warm/yellow cast within visible teeth pixels
+  signal: number;      // combined reversed-UNMOG teeth signal
+}
+
 /**
  * Analyze a rectangular crop of the source video. Caller passes pixel-space
  * bounds within the video element. Internally we sample at 96x96 to keep
@@ -82,4 +88,53 @@ export async function analyzeSkin(
   const roughness = Math.max(0, Math.min(1, (energy - runningMin) / range));
 
   return { roughness, rawEnergy: energy };
+}
+
+export async function analyzeTeeth(
+  video: HTMLVideoElement,
+  cropX: number, cropY: number, cropW: number, cropH: number,
+): Promise<TeethReading> {
+  await ensureBackend();
+  if (cropW < 12 || cropH < 8) return { visibility: 0, yellowTint: 0, signal: 0 };
+
+  const tmp = document.createElement("canvas");
+  const W = 80;
+  const H = 44;
+  tmp.width = W;
+  tmp.height = H;
+  const tctx = tmp.getContext("2d");
+  if (!tctx) return { visibility: 0, yellowTint: 0, signal: 0 };
+  try {
+    tctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, W, H);
+  } catch {
+    return { visibility: 0, yellowTint: 0, signal: 0 };
+  }
+
+  const reading = tf.tidy(() => {
+    const img = tf.browser.fromPixels(tmp, 3).toFloat().div(255);
+    const [r, g, b] = tf.split(img, 3, 2);
+    const maxRgb = tf.maximum(tf.maximum(r, g), b);
+    const minRgb = tf.minimum(tf.minimum(r, g), b);
+    const brightness = img.mean(2, true);
+    const saturation = maxRgb.sub(minRgb).div(maxRgb.add(1e-4));
+
+    const brightMask = brightness.sub(0.48).mul(9).sigmoid();
+    const lowSatMask = tf.scalar(1).sub(saturation.sub(0.46).mul(8).sigmoid());
+    const teethMask = brightMask.mul(lowSatMask);
+    const visibility = teethMask.mean().dataSync()[0];
+
+    const warm = r.add(g).mul(0.5).sub(b).sub(0.055).mul(10).sigmoid();
+    const warmWeighted = warm.mul(teethMask).sum().dataSync()[0];
+    const maskMass = teethMask.sum().dataSync()[0];
+    const yellowTint = maskMass > 1e-4 ? warmWeighted / maskMass : 0;
+    const signal = Math.max(0, Math.min(1, visibility * (0.45 + yellowTint * 0.55)));
+
+    return { visibility, yellowTint, signal };
+  });
+
+  return {
+    visibility: Math.max(0, Math.min(1, reading.visibility)),
+    yellowTint: Math.max(0, Math.min(1, reading.yellowTint)),
+    signal: Math.max(0, Math.min(1, reading.signal)),
+  };
 }
