@@ -128,7 +128,9 @@ export default function ScorerDebug() {
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
   const [hasFace, setHasFace] = useState(false);
   const [skinRoughness, setSkinRoughness] = useState(0);
+  const hasFaceRef = useRef(false);
   const noFaceFramesRef = useRef(0);
+  const lastDebugLogRef = useRef(0);
 
   /* Load MediaPipe */
   useEffect(() => {
@@ -245,13 +247,16 @@ export default function ScorerDebug() {
           }
           bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
         }
-        // Lower bar: MediaPipe returns 478 landmarks when it sees a face,
-        // so any landmarks at all means we have one. Bbox ≥ ~12% width is
-        // enough to score reliably; smaller faces just dampen confidence.
-        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.015;
+        // MediaPipe returns 478 landmarks when it sees a face. Keep the gate
+        // permissive so normal webcam distance doesn't get marked NO FACE;
+        // small/partial faces are handled by confidence damping below.
+        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.006;
         if (faceConfident && lm) {
           noFaceFramesRef.current = 0;
-          if (!hasFace) setHasFace(true);
+          if (!hasFaceRef.current) {
+            hasFaceRef.current = true;
+            setHasFace(true);
+          }
           const spatial = extractSpatial(lm);
           const emotion = extractEmotion(lm);
           const structure = extractStructure(lm);
@@ -271,9 +276,9 @@ export default function ScorerDebug() {
           // Confidence proxy: bbox size (bigger = closer = more reliable)
           // tempered by motion stability. Floor at 0.5 so a normal-distance
           // face never gets its score crushed.
-          const sizeConf = Math.min(1, bboxArea / 0.10);
-          const motionPenalty = Math.min(0.3, temporal.motionInstability * 0.4);
-          const confidence = Math.max(0.5, sizeConf - motionPenalty);
+          const sizeConf = Math.min(1, bboxArea / 0.07);
+          const motionPenalty = Math.min(0.22, temporal.motionInstability * 0.28);
+          const confidence = Math.max(0.65, sizeConf - motionPenalty);
 
           const result2 = scoreFromFeatures(
             spatial,
@@ -288,6 +293,19 @@ export default function ScorerDebug() {
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
+
+          const nowForDebug = performance.now();
+          if (nowForDebug - lastDebugLogRef.current > 1000) {
+            lastDebugLogRef.current = nowForDebug;
+            console.table({
+              asymmetry_pct: Math.round(spatial.raw.asymmetryPct * 100),
+              chin_compression: spatial.raw.chinCompression.toFixed(3),
+              head_tilt_deg: spatial.raw.headTiltDeg.toFixed(1),
+              mouth_open_ratio: spatial.raw.mouthOpenRatio.toFixed(3),
+              teeth_exposure: spatial.raw.teethExposure.toFixed(3),
+              score: result2.score.toFixed(2),
+            });
+          }
 
           // ---- Biometric scan overlay ---------------------------------
           // The wrapping container mirrors video + canvas together, so we
@@ -399,8 +417,14 @@ export default function ScorerDebug() {
           // Gradual decay (×0.9 / frame) instead of an instant drop, then
           // hide the score box after a short tolerance window.
           prevScoreRef.current = prevScoreRef.current * 0.9;
-          if (noFaceFramesRef.current > 12 && hasFace) {
+          if (noFaceFramesRef.current > 12 && hasFaceRef.current) {
+            hasFaceRef.current = false;
             setHasFace(false);
+            setBreakdown(null);
+            setSkinRoughness(0);
+            skinRoughnessRef.current = 0;
+            temporalRef.current.reset();
+            audioTrackerRef.current.reset();
           }
         }
       } catch {
