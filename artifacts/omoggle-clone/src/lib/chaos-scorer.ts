@@ -238,10 +238,32 @@ export function extractStructure(lm: Pt[]): StructureFeatures {
     norm((Math.abs(t1 - ideal) + Math.abs(t2 - ideal) + Math.abs(t3 - ideal)) / total, 0.05, 0.45),
   );
 
-  // Cantal-tilt proxy: angle between inner and outer corners of each eye.
-  const lTilt = Math.atan2(p[L.leftEyeOut].y - p[L.leftEyeIn].y, p[L.leftEyeOut].x - p[L.leftEyeIn].x);
-  const rTilt = Math.atan2(p[L.rightEyeIn].y - p[L.rightEyeOut].y, p[L.rightEyeIn].x - p[L.rightEyeOut].x);
-  const cantalDeviation = clamp01(norm((Math.abs(lTilt) + Math.abs(rTilt)) / 2, 0.05, 0.35));
+  // Cantal tilt — the looksmaxxing "fox-eye" metric.
+  // Definition: signed angle, in radians, from the medial canthus (inner
+  // eye corner) to the lateral canthus (outer eye corner), measured
+  // against horizontal AFTER pose-normalization. Positive ≈ upturned
+  // ("ideal", roughly +5–10°). Flat (≈0°) or negative ("downturned" /
+  // hooded) is the "chopped" look. We reward distance from the +0.12 rad
+  // ideal so flat & negative tilts both raise the score.
+  // NOTE: x is mirrored between eyes — for the LEFT eye in the image the
+  // medial corner is at higher x, for the RIGHT eye it's at lower x.
+  // We compute each as (lateral - medial) so both sign conventions match.
+  const lTilt = Math.atan2(
+    p[L.leftEyeOut].y - p[L.leftEyeIn].y,
+    p[L.leftEyeOut].x - p[L.leftEyeIn].x,
+  );
+  const rTilt = Math.atan2(
+    p[L.rightEyeOut].y - p[L.rightEyeIn].y,
+    p[L.rightEyeOut].x - p[L.rightEyeIn].x,
+  );
+  // Eyes mirror across midline — flip the right side so positive = upturned
+  // for both, then average.
+  const avgTilt = (lTilt + -rTilt) / 2;
+  // Image coordinates are y-down, so an upturned outer corner has lower y
+  // -> negative tilt. Flip sign so "upturned" reads as positive.
+  const upturned = -avgTilt;
+  const ideal = 0.12; // ~7°, the looksmaxx "positive cantal tilt" target
+  const cantalDeviation = clamp01(norm(Math.abs(upturned - ideal), 0.03, 0.30));
 
   // Inversion: reward deviation from ideal — but keep magnitude modest.
   const inversion = clamp01(
