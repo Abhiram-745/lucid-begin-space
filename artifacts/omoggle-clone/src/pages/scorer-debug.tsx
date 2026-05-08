@@ -11,6 +11,31 @@ import {
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
+import { analyzeSkin } from "@/lib/skin-analyzer";
+
+/** Connection sets shipped with @mediapipe/tasks-vision — typed loosely so
+ *  we don't depend on the internal Connection shape. */
+const TESSELATION = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_TESSELATION: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_TESSELATION;
+const FACE_OVAL = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_FACE_OVAL: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_FACE_OVAL;
+const LIPS = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LIPS: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LIPS;
+const LEFT_EYE = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LEFT_EYE: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LEFT_EYE;
+const RIGHT_EYE = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_RIGHT_EYE: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_RIGHT_EYE;
+const LEFT_BROW = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LEFT_EYEBROW: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LEFT_EYEBROW;
+const RIGHT_BROW = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_RIGHT_EYEBROW: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_RIGHT_EYEBROW;
 
 /* Smoothed contour paths through subsets of the FaceMesh vertex set.
  * Indices chosen to draw clean curves with no internal noise. */
