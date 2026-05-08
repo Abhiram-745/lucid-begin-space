@@ -259,6 +259,7 @@ export default function ScorerDebug() {
             prevScoreRef.current,
             emotion,
             structure,
+            skinRoughnessRef.current,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
