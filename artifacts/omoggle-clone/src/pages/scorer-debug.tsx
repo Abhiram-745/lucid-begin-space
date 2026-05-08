@@ -245,7 +245,10 @@ export default function ScorerDebug() {
           }
           bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
         }
-        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.04; // ~20% wide
+        // Lower bar: MediaPipe returns 478 landmarks when it sees a face,
+        // so any landmarks at all means we have one. Bbox ≥ ~12% width is
+        // enough to score reliably; smaller faces just dampen confidence.
+        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.015;
         if (faceConfident && lm) {
           noFaceFramesRef.current = 0;
           if (!hasFace) setHasFace(true);
@@ -266,11 +269,11 @@ export default function ScorerDebug() {
           }
 
           // Confidence proxy: bbox size (bigger = closer = more reliable)
-          // tempered by motion stability (very shaky landmarks => less
-          // trustworthy frame).
-          const sizeConf = Math.min(1, bboxArea / 0.18);
-          const motionPenalty = Math.min(0.4, temporal.motionInstability * 0.6);
-          const confidence = Math.max(0.25, sizeConf - motionPenalty);
+          // tempered by motion stability. Floor at 0.5 so a normal-distance
+          // face never gets its score crushed.
+          const sizeConf = Math.min(1, bboxArea / 0.10);
+          const motionPenalty = Math.min(0.3, temporal.motionInstability * 0.4);
+          const confidence = Math.max(0.5, sizeConf - motionPenalty);
 
           const result2 = scoreFromFeatures(
             spatial,
