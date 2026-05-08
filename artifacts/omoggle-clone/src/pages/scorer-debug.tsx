@@ -127,6 +127,7 @@ export default function ScorerDebug() {
   const [error, setError] = useState("");
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
   const [hasFace, setHasFace] = useState(false);
+  const [skinRoughness, setSkinRoughness] = useState(0);
   const noFaceFramesRef = useRef(0);
 
   /* Load MediaPipe */
@@ -407,6 +408,7 @@ export default function ScorerDebug() {
                 // Smooth the roughness signal so it doesn't jitter the score.
                 skinRoughnessRef.current =
                   skinRoughnessRef.current * 0.7 + r.roughness * 0.3;
+                setSkinRoughness(skinRoughnessRef.current);
               })
               .catch(() => {})
               .finally(() => { skinBusyRef.current = false; });
