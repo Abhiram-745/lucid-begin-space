@@ -11,6 +11,31 @@ import {
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
+import { analyzeSkin } from "@/lib/skin-analyzer";
+
+/** Connection sets shipped with @mediapipe/tasks-vision — typed loosely so
+ *  we don't depend on the internal Connection shape. */
+const TESSELATION = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_TESSELATION: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_TESSELATION;
+const FACE_OVAL = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_FACE_OVAL: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_FACE_OVAL;
+const LIPS = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LIPS: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LIPS;
+const LEFT_EYE = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LEFT_EYE: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LEFT_EYE;
+const RIGHT_EYE = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_RIGHT_EYE: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_RIGHT_EYE;
+const LEFT_BROW = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_LEFT_EYEBROW: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_LEFT_EYEBROW;
+const RIGHT_BROW = (FaceLandmarker as unknown as {
+  FACE_LANDMARKS_RIGHT_EYEBROW: Array<{ start: number; end: number }>;
+}).FACE_LANDMARKS_RIGHT_EYEBROW;
 
 /* Smoothed contour paths through subsets of the FaceMesh vertex set.
  * Indices chosen to draw clean curves with no internal noise. */
@@ -92,6 +117,9 @@ export default function ScorerDebug() {
   const rafRef = useRef<number>(0);
   const lastVideoTimeRef = useRef(-1);
   const prevScoreRef = useRef(0);
+  const skinRoughnessRef = useRef(0);
+  const lastSkinRunRef = useRef(0);
+  const skinBusyRef = useRef(false);
 
   const [modelReady, setModelReady] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -99,6 +127,7 @@ export default function ScorerDebug() {
   const [error, setError] = useState("");
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
   const [hasFace, setHasFace] = useState(false);
+  const [skinRoughness, setSkinRoughness] = useState(0);
   const noFaceFramesRef = useRef(0);
 
   /* Load MediaPipe */
@@ -231,6 +260,7 @@ export default function ScorerDebug() {
             prevScoreRef.current,
             emotion,
             structure,
+            skinRoughnessRef.current,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
@@ -271,42 +301,56 @@ export default function ScorerDebug() {
             ctx.stroke();
           }
 
-          // 3. Smooth glowing contours along facial regions
+          // 3. FULL TRIANGULATED FACE MESH (FACEMESH_TESSELATION)
+          //    Drawn first, low opacity, glow scales with score.
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          for (const path of CONTOURS) {
-            const pts = path.map((i) => ({ x: lm[i].x * w, y: lm[i].y * h }));
-            // Outer glow pass
-            ctx.lineWidth = 4 + t * 3;
-            ctx.strokeStyle = chaosColor(t, 0.18);
-            ctx.shadowBlur = 14 + t * 22;
-            strokeSmooth(ctx, pts);
-            // Crisp inner stroke
-            ctx.lineWidth = 1.1;
-            ctx.strokeStyle = chaosColor(t, 0.95);
-            ctx.shadowBlur = 6;
-            strokeSmooth(ctx, pts);
+          ctx.lineWidth = 0.5;
+          ctx.shadowBlur = 4 + t * 8;
+          ctx.shadowColor = chaosColor(t, 0.6);
+          ctx.strokeStyle = chaosColor(t, 0.10 + t * 0.18);
+          ctx.beginPath();
+          for (let i = 0; i < TESSELATION.length; i++) {
+            const c = TESSELATION[i];
+            const a = lm[c.start]; const b = lm[c.end];
+            if (!a || !b) continue;
+            ctx.moveTo(a.x * w, a.y * h);
+            ctx.lineTo(b.x * w, b.y * h);
           }
+          ctx.stroke();
 
-          // 4. Simplified mesh — connect key region anchors
-          const meshLinks: Array<[number, number]> = [
-            [33, 133], [362, 263],          // eyes
-            [133, 1], [362, 1],             // eye->nose
-            [1, 61], [1, 291],              // nose->mouth corners
-            [61, 291],                      // mouth line
-            [61, 152], [291, 152],          // mouth->chin
-            [234, 152], [454, 152],         // jaw->chin
-            [234, 33], [454, 263],          // jaw->eye
-          ];
-          ctx.lineWidth = 0.6;
-          ctx.strokeStyle = chaosColor(t, 0.35);
-          ctx.shadowBlur = 4;
-          for (const [a, b] of meshLinks) {
+          // 4. CONTOUR LINES — jawline, brows, eyes, lips. Two passes:
+          //    fat soft outer glow + thin crisp inner stroke. Glow scales
+          //    aggressively with chaos score.
+          const drawContour = (
+            conns: Array<{ start: number; end: number }>,
+            width: number,
+          ) => {
+            // Outer glow
+            ctx.lineWidth = width + 3 + t * 4;
+            ctx.strokeStyle = chaosColor(t, 0.22 + t * 0.22);
+            ctx.shadowBlur = 14 + t * 26;
+            ctx.shadowColor = chaosColor(t, 0.95);
             ctx.beginPath();
-            ctx.moveTo(lm[a].x * w, lm[a].y * h);
-            ctx.lineTo(lm[b].x * w, lm[b].y * h);
+            for (const c of conns) {
+              const a = lm[c.start]; const b = lm[c.end];
+              if (!a || !b) continue;
+              ctx.moveTo(a.x * w, a.y * h);
+              ctx.lineTo(b.x * w, b.y * h);
+            }
             ctx.stroke();
-          }
+            // Crisp inner stroke
+            ctx.lineWidth = width;
+            ctx.strokeStyle = chaosColor(t, 0.98);
+            ctx.shadowBlur = 6 + t * 8;
+            ctx.stroke();
+          };
+          drawContour(FACE_OVAL, 1.2);
+          drawContour(LEFT_BROW, 1.4);
+          drawContour(RIGHT_BROW, 1.4);
+          drawContour(LEFT_EYE, 1.1);
+          drawContour(RIGHT_EYE, 1.1);
+          drawContour(LIPS, 1.3);
 
           // 5. Pulsing landmark nodes
           const pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
@@ -347,6 +391,28 @@ export default function ScorerDebug() {
           }
 
           ctx.shadowBlur = 0;
+
+          // 8. TF.js skin-roughness sample — runs every ~400ms on the
+          //    cheek/forehead region. Result feeds the next score frame.
+          const now = performance.now();
+          if (!skinBusyRef.current && now - lastSkinRunRef.current > 400) {
+            lastSkinRunRef.current = now;
+            skinBusyRef.current = true;
+            // Sample a tighter inner region (avoid hairline + jaw edges).
+            const sx = bx + bw * 0.18;
+            const sy = by + bh * 0.20;
+            const sw = bw * 0.64;
+            const sh = bh * 0.55;
+            analyzeSkin(video, sx, sy, sw, sh)
+              .then((r) => {
+                // Smooth the roughness signal so it doesn't jitter the score.
+                skinRoughnessRef.current =
+                  skinRoughnessRef.current * 0.7 + r.roughness * 0.3;
+                setSkinRoughness(skinRoughnessRef.current);
+              })
+              .catch(() => {})
+              .finally(() => { skinBusyRef.current = false; });
+          }
         }
         else {
           noFaceFramesRef.current += 1;
@@ -548,6 +614,7 @@ export default function ScorerDebug() {
                   <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} />
                   <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} />
                   <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
+                  <Bar label="Skin texture (TF.js)" value={skinRoughness} />
                 </div>
               </div>
 

@@ -452,6 +452,7 @@ export function scoreFromFeatures(
   prevScore = 0,
   e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
+  skinRoughness = 0,
 ): ChaosBreakdown {
   const weightSum = Object.values(w).reduce((sum, v) => sum + v, 0);
 
@@ -490,6 +491,11 @@ export function scoreFromFeatures(
   // it. NOTE: landmark geometry only — we cannot detect skin (acne) here.
   curved += 0.35 * st.inversion;
   curved -= 0.20 * st.symmetryIdeal;
+
+  // Step 7: TF.js skin-roughness signal — high-frequency texture energy
+  // from the cheek/forehead crop. Bumpy / textured skin pushes the score
+  // up. Entertainment heuristic only.
+  curved += 0.25 * skinRoughness;
 
   const target = clamp01(curved) * 10;
 
