@@ -425,19 +425,21 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // Reward ACTION over face structure. Performance signals dominate.
-  asymmetry: 0.25,
-  mouthDistortion: 1.8,
-  eyeChaos: 1.4,
-  chinCompression: 0.7,
-  headAngle: 0.6,
-  expressionVolatility: 2.2,
-  motionInstability: 1.9,
-  audioEnergy: 1.6,
-  audioPitch: 0.9,
-  audioEntropy: 0.5,
-  audioSpike: 1.0,
-  commitment: 2.4,
+  // Balance: structural "chopped"-ness drives the baseline (asymmetry,
+  // chin compression, ratio deviation) — performance is reactive boost.
+  // Sitting still + symmetric => LOW score. Distorted/asymmetric => HIGH.
+  asymmetry: 1.6,
+  mouthDistortion: 1.4,
+  eyeChaos: 1.0,
+  chinCompression: 1.6,
+  headAngle: 0.4,
+  expressionVolatility: 1.4,
+  motionInstability: 1.2,
+  audioEnergy: 0.9,
+  audioPitch: 0.5,
+  audioEntropy: 0.3,
+  audioSpike: 0.7,
+  commitment: 1.0,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
