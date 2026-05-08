@@ -1,29 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, OctagonX, Radar, ScanFace, ShieldCheck } from "lucide-react";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { ChevronLeft, OctagonX, Radar, ScanFace, ShieldCheck, Zap, Skull, Smile, AlertOctagon } from "lucide-react";
+import { useChaosPipeline } from "@/lib/use-chaos-pipeline";
+import { EventDetector, type InstantEvent } from "@/lib/instant-win";
 
 type Phase = "searching" | "live";
-type LandmarkPoint = { x: number; y: number };
 
 const MATCHMAKING_SECONDS = 10;
-const KEY_LANDMARKS = [
-  10,  // forehead
-  33,  // left eye
-  133,
-  362, // right eye
-  263,
-  1,   // nose bridge
-  2,   // nose tip
-  49,  // left cheek/nose wing
-  279, // right cheek/nose wing
-  61,  // mouth left
-  291, // mouth right
-  199, // chin upper
-  152, // chin lower
-  234, // left jaw
-  454, // right jaw
-];
+const ROUND_SECONDS = 60;
 
 function formatStopwatch(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -36,16 +20,23 @@ export default function LiveArena() {
   const [phase, setPhase] = useState<Phase>("searching");
   const [elapsed, setElapsed] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
-  const [modelReady, setModelReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [roundLeft, setRoundLeft] = useState(ROUND_SECONDS);
+  const [oppScore, setOppScore] = useState(0);
+  const [peakLocal, setPeakLocal] = useState(0);
+  const [peakOpp, setPeakOpp] = useState(0);
+  const [events, setEvents] = useState<InstantEvent[]>([]);
+  const [winner, setWinner] = useState<"you" | "opp" | "draw" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const landmarkerRef = useRef<FaceLandmarker | null>(null);
-  const rafRef = useRef<number>(0);
-  const lastVideoTimeRef = useRef(-1);
-  const lastLandmarkPointsRef = useRef<LandmarkPoint[]>([]);
+  const detector = useRef(new EventDetector());
+  const oppRef = useRef(0); // simulated opponent score
+
+  const pipeline = useChaosPipeline({ videoRef, audioStream });
+  const localScore = pipeline.breakdown?.score ?? 0;
+  const modelReady = pipeline.ready;
 
   useEffect(() => {
     if (phase !== "searching") return;
@@ -64,54 +55,21 @@ export default function LiveArena() {
   }, [phase]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadLandmarker() {
-      try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-        );
-        const landmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "CPU",
-          },
-          runningMode: "VIDEO",
-          numFaces: 1,
-        });
-
-        if (!cancelled) {
-          landmarkerRef.current = landmarker;
-          setModelReady(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setModelReady(false);
-        }
-      }
-    }
-
-    loadLandmarker();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (phase !== "live") return;
 
     navigator.mediaDevices
       .getUserMedia({
         video: { facingMode: "user", width: 1280, height: 720 },
-        audio: false,
+        audio: true,
       })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          // Mute the local video element to avoid feedback; audio is analysed separately.
+          const videoOnly = new MediaStream(stream.getVideoTracks());
+          videoRef.current.srcObject = videoOnly;
         }
+        setAudioStream(new MediaStream(stream.getAudioTracks()));
         setCameraReady(true);
       })
       .catch(() => {
@@ -121,88 +79,68 @@ export default function LiveArena() {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      setAudioStream(null);
       setCameraReady(false);
     };
   }, [phase]);
 
-  const drawLandmarks = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const landmarker = landmarkerRef.current;
-
-    if (!video || !canvas || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(drawLandmarks);
-      return;
-    }
-
-    const rect = video.getBoundingClientRect();
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      rafRef.current = requestAnimationFrame(drawLandmarks);
-      return;
-    }
-
-    if (landmarker && video.currentTime !== lastVideoTimeRef.current) {
-      lastVideoTimeRef.current = video.currentTime;
-
-      try {
-        const result = landmarker.detectForVideo(video, performance.now());
-        const landmarks = result.faceLandmarks?.[0];
-
-        if (landmarks) {
-          lastLandmarkPointsRef.current = KEY_LANDMARKS.flatMap((index) => {
-            const point = landmarks[index];
-            return point ? [{ x: point.x, y: point.y }] : [];
-          });
+  // Round timer + simulated opponent + event detection
+  useEffect(() => {
+    if (phase !== "live" || winner) return;
+    const tick = window.setInterval(() => {
+      setRoundLeft((s) => {
+        if (s <= 1) {
+          window.clearInterval(tick);
+          // decide winner on time-out
+          setWinner((w) => w ?? (localScore >= oppRef.current ? "you" : "opp"));
+          return 0;
         }
-      } catch {
-        // MediaPipe can miss a frame while the stream warms up.
+        return s - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [phase, winner, localScore]);
+
+  // Drift the simulated opponent score toward a wandering target so the bar feels alive.
+  useEffect(() => {
+    if (phase !== "live" || winner) return;
+    let target = 4 + Math.random() * 3;
+    const id = window.setInterval(() => {
+      target = Math.max(1, Math.min(9, target + (Math.random() - 0.5) * 2.5));
+      oppRef.current = oppRef.current + (target - oppRef.current) * 0.18;
+      setOppScore(oppRef.current);
+      setPeakOpp((p) => Math.max(p, oppRef.current));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [phase, winner]);
+
+  // Track local peak + run instant-win detector
+  useEffect(() => {
+    if (!pipeline.breakdown) return;
+    setPeakLocal((p) => Math.max(p, pipeline.breakdown!.score));
+    const audioSpike = pipeline.breakdown.audio.spike;
+    // Use simulated opponent mouth proxy from oppScore
+    const oppMouthProxy = Math.min(1, oppRef.current / 10 + Math.random() * 0.05);
+    const fired = detector.current.step(pipeline.breakdown, oppMouthProxy, true, audioSpike);
+    if (fired.length) {
+      setEvents((prev) => [...prev, ...fired].slice(-5));
+      for (const ev of fired) {
+        if (ev.type === "opponent_laugh") setWinner("you");
+        if (ev.type === "no_face") setWinner("you");
       }
     }
+  }, [pipeline.breakdown]);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-
-    for (const point of lastLandmarkPointsRef.current) {
-      const x = point.x * canvas.width;
-      const y = point.y * canvas.height;
-
-      ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(34, 197, 94, 0.34)";
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(x, y, 4.2, 0, Math.PI * 2);
-      ctx.fillStyle = "#22e96b";
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = "rgba(34, 233, 107, 0.9)";
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    ctx.restore();
-    rafRef.current = requestAnimationFrame(drawLandmarks);
+  const restart = useCallback(() => {
+    detector.current.reset();
+    setEvents([]);
+    setWinner(null);
+    setPeakLocal(0);
+    setPeakOpp(0);
+    setRoundLeft(ROUND_SECONDS);
+    oppRef.current = 0;
+    setOppScore(0);
   }, []);
-
-  useEffect(() => {
-    if (phase !== "live" || !cameraReady) return;
-
-    rafRef.current = requestAnimationFrame(drawLandmarks);
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [cameraReady, drawLandmarks, phase]);
 
   if (phase === "searching") {
     return (
@@ -295,29 +233,24 @@ export default function LiveArena() {
                 cameraReady ? "opacity-100" : "opacity-0"
               }`}
             />
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 h-full w-full pointer-events-none"
-            />
-
             <div className="pointer-events-none absolute inset-5 rounded-[24px] border border-white/35" />
-            <div className="absolute left-8 top-8 rounded-[16px] border border-white/14 bg-black/60 p-4 backdrop-blur-md">
-              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
-                Signal Scan
-              </div>
-              <div className="mt-1 text-4xl font-black tracking-[-0.08em] text-white">
-                {modelReady ? "ON" : "..."}
-              </div>
-              <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">
-                Key face points
-              </div>
+            {/* score HUD bottom */}
+            <div className="absolute inset-x-6 bottom-6 grid grid-cols-2 gap-4">
+              <ScoreBar label="You" score={localScore} color="emerald" />
+              <ScoreBar label="Opponent" score={oppScore} color="violet" />
             </div>
 
-            <div className="absolute right-8 top-8 rounded-full border border-cyan-100/30 bg-[#152b36]/80 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-100 backdrop-blur-md">
-              Test Match
+            {/* round timer */}
+            <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-5 py-2 text-xs font-black uppercase tracking-[0.24em] text-white backdrop-blur-md">
+              {roundLeft}s
             </div>
 
-            <div className="absolute inset-x-0 top-1/2 h-px bg-cyan-300/30 shadow-[0_0_18px_rgba(34,211,238,0.45)]" />
+            {/* event banners */}
+            <div className="pointer-events-none absolute left-1/2 top-20 flex -translate-x-1/2 flex-col items-center gap-2">
+              {events.slice(-3).map((e, i) => (
+                <EventBadge key={`${e.type}-${e.t}-${i}`} ev={e} />
+              ))}
+            </div>
 
             {!cameraReady && !cameraError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -342,37 +275,51 @@ export default function LiveArena() {
                 </div>
               </div>
             )}
+
+            {winner && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md">
+                <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200">Round Over</div>
+                  <div className="mt-3 text-6xl font-black uppercase tracking-[0.1em] text-white">
+                    {winner === "you" ? "You UNMOG'd" : winner === "opp" ? "You Got UNMOG'd" : "Draw"}
+                  </div>
+                  <div className="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-white/60">
+                    Peak {peakLocal.toFixed(1)} vs {peakOpp.toFixed(1)}
+                  </div>
+                  <div className="mt-8 flex justify-center gap-3">
+                    <button onClick={restart} className="rounded-full border border-emerald-300/40 bg-emerald-500/10 px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-emerald-200 hover:bg-emerald-500/20">
+                      Rematch
+                    </button>
+                    <Link href="/arena" className="rounded-full border border-white/15 bg-white/5 px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-white/70 hover:bg-white/10">
+                      Exit
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <aside className="rounded-[34px] border border-white/12 bg-white/[0.045] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.32)] backdrop-blur-md">
-            <div className="text-xs font-black uppercase tracking-[0.28em] text-cyan-200">
-              Match Found
-            </div>
-            <h1 className="mt-4 text-4xl font-black uppercase tracking-[0.08em] text-white">
-              1v1 Arena
-            </h1>
-            <p className="mt-5 text-sm font-bold uppercase leading-relaxed tracking-[0.14em] text-white/42">
-              Live camera feed with local face landmark detection. Green points are drawn over nose, eyes, cheeks, mouth, and chin.
-            </p>
+            <div className="text-xs font-black uppercase tracking-[0.28em] text-cyan-200">UNMOG Telemetry</div>
+            <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] text-white">{localScore.toFixed(2)}<span className="text-xl text-white/40"> / 10</span></h1>
+            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-white/45">Peak {peakLocal.toFixed(2)}</div>
 
-            <div className="mt-10 grid gap-3">
-              {[
-                ["Model", modelReady ? "Ready" : "Loading"],
-                ["Camera", cameraReady ? "Live" : "Pending"],
-                ["Overlay", modelReady && cameraReady ? "Active" : "Waiting"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between rounded-[18px] border border-white/10 bg-black/35 px-4 py-3"
-                >
-                  <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">
-                    {label}
-                  </span>
-                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">
-                    {value}
-                  </span>
-                </div>
-              ))}
+            <div className="mt-8 grid gap-2">
+              <FeatureRow label="Asymmetry"  v={pipeline.breakdown?.spatial.asymmetry ?? 0} />
+              <FeatureRow label="Mouth"      v={pipeline.breakdown?.spatial.mouthDistortion ?? 0} />
+              <FeatureRow label="Eye Chaos"  v={pipeline.breakdown?.spatial.eyeChaos ?? 0} />
+              <FeatureRow label="Chin"       v={pipeline.breakdown?.spatial.chinCompression ?? 0} />
+              <FeatureRow label="Head Angle" v={pipeline.breakdown?.spatial.headAngle ?? 0} />
+              <FeatureRow label="Motion"     v={pipeline.breakdown?.temporal.motionInstability ?? 0} />
+              <FeatureRow label="Volatility" v={pipeline.breakdown?.temporal.expressionVolatility ?? 0} />
+              <FeatureRow label="Commit"     v={pipeline.breakdown?.temporal.commitment ?? 0} />
+              <FeatureRow label="Audio"      v={pipeline.breakdown?.audio.energy ?? 0} />
+              <FeatureRow label="Pitch Var"  v={pipeline.breakdown?.audio.pitchVariation ?? 0} />
+            </div>
+
+            <div className="mt-6 flex items-center justify-between rounded-[18px] border border-white/10 bg-black/35 px-4 py-3">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Face Detected</span>
+              <span className={`text-sm font-black uppercase tracking-[0.16em] ${pipeline.hasFace ? "text-emerald-300" : "text-red-300"}`}>{pipeline.hasFace ? "Yes" : "No"}</span>
             </div>
 
             <Link
@@ -385,6 +332,54 @@ export default function LiveArena() {
           </aside>
         </section>
       </main>
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, color }: { label: string; score: number; color: "emerald" | "violet" }) {
+  const pct = Math.max(0, Math.min(100, (score / 10) * 100));
+  const grad = color === "emerald"
+    ? "from-emerald-400 to-cyan-300"
+    : "from-violet-400 to-fuchsia-400";
+  return (
+    <div className="rounded-[18px] border border-white/15 bg-black/55 p-3 backdrop-blur-md">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-black uppercase tracking-[0.24em] text-white/55">{label}</span>
+        <span className="text-2xl font-black tracking-[-0.04em] text-white">{score.toFixed(1)}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full bg-gradient-to-r ${grad} transition-all duration-150`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FeatureRow({ label, v }: { label: string; v: number }) {
+  const pct = Math.max(0, Math.min(100, v * 100));
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-24 shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
+        <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-8 text-right text-[10px] font-black tabular-nums text-white/55">{v.toFixed(2)}</span>
+    </div>
+  );
+}
+
+function EventBadge({ ev }: { ev: InstantEvent }) {
+  const map = {
+    opponent_laugh:   { Icon: Smile,        text: "OPPONENT LAUGHED — INSTANT WIN", color: "from-emerald-400 to-lime-300" },
+    double_chin_lock: { Icon: Skull,        text: "DOUBLE CHIN LOCK +200",          color: "from-amber-400 to-orange-400" },
+    mega_unmog:       { Icon: Zap,          text: "MEGA UNMOG x2",                  color: "from-fuchsia-400 to-violet-400" },
+    no_face:          { Icon: AlertOctagon, text: "OPPONENT FORFEIT",               color: "from-red-400 to-rose-400" },
+  } as const;
+  const cfg = map[ev.type];
+  const Icon = cfg.Icon;
+  return (
+    <div className={`flex items-center gap-2 rounded-full bg-gradient-to-r ${cfg.color} px-5 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] animate-in fade-in slide-in-from-top-2 duration-300`}>
+      <Icon className="h-4 w-4" />
+      {cfg.text}
     </div>
   );
 }
