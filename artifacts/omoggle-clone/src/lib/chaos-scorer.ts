@@ -541,10 +541,11 @@ export function scoreFromFeatures(
   // so micro-jitter (lighting flicker, sub-pixel landmark noise) yields 0.
   const f = {
     asymmetry:           deadzone(s.asymmetry),
-    mouthDistortion:     deadzone(s.mouthDistortion, 0.10),
+    mouthDistortion:     deadzone(s.mouthDistortion, 0.06),
+    teethExposure:       deadzone(s.teethExposure, 0.05),
     eyeChaos:            deadzone(s.eyeChaos, 0.08),
-    chinCompression:     deadzone(s.chinCompression),
-    headAngle:           deadzone(s.headAngle, 0.10),
+    chinCompression:     deadzone(s.chinCompression, 0.04),
+    headAngle:           deadzone(s.headAngle, 0.04),
     expressionVolatility:deadzone(t.expressionVolatility, 0.05),
     motionInstability:   deadzone(t.motionInstability, 0.05),
     audioEnergy:         deadzone(a.energy, 0.08),
@@ -556,11 +557,12 @@ export function scoreFromFeatures(
 
   // ---- 2. Performance bucket (~75 %) -------------------------------------
   const perfWeights =
-    w.mouthDistortion + w.eyeChaos + w.expressionVolatility +
+    w.mouthDistortion + w.teethExposure + w.eyeChaos + w.expressionVolatility +
     w.motionInstability + w.audioEnergy + w.audioPitch +
     w.audioEntropy + w.audioSpike + w.commitment;
   const performance =
     (w.mouthDistortion       * f.mouthDistortion +
+     w.teethExposure         * f.teethExposure +
      w.eyeChaos              * f.eyeChaos +
      w.expressionVolatility  * f.expressionVolatility +
      w.motionInstability     * f.motionInstability +
@@ -585,14 +587,24 @@ export function scoreFromFeatures(
   );
 
   // ---- 4. Combine + sigmoid soft-map -------------------------------------
-  const combined =
-    0.75 * performance +
-    0.25 * structural +
-    0.05 * e.intensity +     // small flavor bump
-    0.10 * skinRoughness;    // TF.js texture (entertainment only)
+  const goodAesthetic = clamp01(
+    0.45 * st.symmetryIdeal +
+    0.25 * (1 - st.ratioDeviation) +
+    0.20 * (1 - st.cantalDeviation) +
+    0.10 * (1 - f.headAngle)
+  );
+  const badChaos = clamp01(
+    0.52 * performance +
+    0.26 * structural +
+    0.08 * e.intensity +
+    0.08 * skinRoughness +
+    0.06 * f.teethExposure
+  );
+
+  const combined = clamp01(0.22 + 0.95 * badChaos - 0.35 * goodAesthetic);
 
   // Sigmoid keeps the curve bounded and removes the aggressive multipliers.
-  let target01 = sigmoid01(combined, 6, 0.42);
+  let target01 = sigmoid01(combined, 5.2, 0.34);
 
   // ---- 5. Confidence weighting -------------------------------------------
   const conf = clamp01(confidence);
