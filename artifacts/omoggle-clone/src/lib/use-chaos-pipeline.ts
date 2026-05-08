@@ -39,7 +39,7 @@ export interface PipelineState {
 }
 
 export interface PipelineOptions {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   /** If a MediaStream is provided, audio is analyzed (local player only). */
   audioStream?: MediaStream | null;
   /** Called after every score update with the latest breakdown. */
@@ -116,8 +116,8 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
           // audio
           let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
           if (analyser.current && timeBuf.current && freqBuf.current) {
-            analyser.current.getFloatTimeDomainData(timeBuf.current);
-            analyser.current.getByteFrequencyData(freqBuf.current);
+            analyser.current.getFloatTimeDomainData(timeBuf.current as unknown as Float32Array<ArrayBuffer>);
+            analyser.current.getByteFrequencyData(freqBuf.current as unknown as Uint8Array<ArrayBuffer>);
             audio = audioTracker.current.update(
               timeBuf.current,
               freqBuf.current,
