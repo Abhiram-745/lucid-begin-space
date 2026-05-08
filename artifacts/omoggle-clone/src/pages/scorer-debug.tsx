@@ -130,9 +130,15 @@ export default function ScorerDebug() {
       return;
     }
 
-    const rect = video.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
+    // Use the video's NATIVE pixel dimensions so landmark coords (normalized
+    // to the source frame) map 1:1 onto the canvas. CSS then scales the
+    // canvas with the same object-fit as the video, keeping them aligned.
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -175,10 +181,8 @@ export default function ScorerDebug() {
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
 
-          // overlay
-          ctx.save();
-          ctx.translate(w, 0);
-          ctx.scale(-1, 1);
+          // Overlay. The wrapping container mirrors BOTH video and canvas,
+          // so we draw landmarks in raw (un-mirrored) source coordinates.
           for (const idx of KEY_LANDMARKS) {
             const p = lm[idx];
             if (!p) continue;
@@ -193,7 +197,6 @@ export default function ScorerDebug() {
             ctx.fillStyle = "#22e96b";
             ctx.fill();
           }
-          ctx.restore();
         }
       } catch {
         // skip frame
@@ -241,16 +244,22 @@ export default function ScorerDebug() {
         <section className="grid flex-1 gap-5 lg:grid-cols-[1fr_380px]">
           {/* Camera */}
           <div className="relative min-h-[480px] overflow-hidden rounded-[34px] border border-white/14 bg-[#070914] shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_24px_80px_rgba(0,0,0,0.46)]">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className={`absolute inset-0 h-full w-full object-cover -scale-x-100 transition-opacity duration-500 ${
-                cameraReady ? "opacity-100" : "opacity-0"
-              }`}
-            />
-            <canvas ref={canvasRef} className="absolute inset-0 h-full w-full pointer-events-none" />
+            {/* Mirror wrapper: flips video AND canvas together so landmarks stay aligned in selfie view */}
+            <div className="absolute inset-0 -scale-x-100">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-500 ${
+                  cameraReady ? "opacity-100" : "opacity-0"
+                }`}
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 h-full w-full object-contain pointer-events-none"
+              />
+            </div>
 
             {/* Big score */}
             <div className="absolute left-6 top-6 rounded-[20px] border border-white/15 bg-black/60 px-5 py-3 backdrop-blur-md">
