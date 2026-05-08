@@ -233,29 +233,24 @@ export default function LiveArena() {
                 cameraReady ? "opacity-100" : "opacity-0"
               }`}
             />
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 h-full w-full pointer-events-none"
-            />
-
             <div className="pointer-events-none absolute inset-5 rounded-[24px] border border-white/35" />
-            <div className="absolute left-8 top-8 rounded-[16px] border border-white/14 bg-black/60 p-4 backdrop-blur-md">
-              <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
-                Signal Scan
-              </div>
-              <div className="mt-1 text-4xl font-black tracking-[-0.08em] text-white">
-                {modelReady ? "ON" : "..."}
-              </div>
-              <div className="mt-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">
-                Key face points
-              </div>
+            {/* score HUD bottom */}
+            <div className="absolute inset-x-6 bottom-6 grid grid-cols-2 gap-4">
+              <ScoreBar label="You" score={localScore} color="emerald" />
+              <ScoreBar label="Opponent" score={oppScore} color="violet" />
             </div>
 
-            <div className="absolute right-8 top-8 rounded-full border border-cyan-100/30 bg-[#152b36]/80 px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-100 backdrop-blur-md">
-              Test Match
+            {/* round timer */}
+            <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-white/15 bg-black/60 px-5 py-2 text-xs font-black uppercase tracking-[0.24em] text-white backdrop-blur-md">
+              {roundLeft}s
             </div>
 
-            <div className="absolute inset-x-0 top-1/2 h-px bg-cyan-300/30 shadow-[0_0_18px_rgba(34,211,238,0.45)]" />
+            {/* event banners */}
+            <div className="pointer-events-none absolute left-1/2 top-20 flex -translate-x-1/2 flex-col items-center gap-2">
+              {events.slice(-3).map((e, i) => (
+                <EventBadge key={`${e.type}-${e.t}-${i}`} ev={e} />
+              ))}
+            </div>
 
             {!cameraReady && !cameraError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -280,37 +275,51 @@ export default function LiveArena() {
                 </div>
               </div>
             )}
+
+            {winner && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md">
+                <div className="text-center">
+                  <div className="text-xs font-black uppercase tracking-[0.32em] text-cyan-200">Round Over</div>
+                  <div className="mt-3 text-6xl font-black uppercase tracking-[0.1em] text-white">
+                    {winner === "you" ? "You UNMOG'd" : winner === "opp" ? "You Got UNMOG'd" : "Draw"}
+                  </div>
+                  <div className="mt-4 text-sm font-bold uppercase tracking-[0.18em] text-white/60">
+                    Peak {peakLocal.toFixed(1)} vs {peakOpp.toFixed(1)}
+                  </div>
+                  <div className="mt-8 flex justify-center gap-3">
+                    <button onClick={restart} className="rounded-full border border-emerald-300/40 bg-emerald-500/10 px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-emerald-200 hover:bg-emerald-500/20">
+                      Rematch
+                    </button>
+                    <Link href="/arena" className="rounded-full border border-white/15 bg-white/5 px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-white/70 hover:bg-white/10">
+                      Exit
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <aside className="rounded-[34px] border border-white/12 bg-white/[0.045] p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.32)] backdrop-blur-md">
-            <div className="text-xs font-black uppercase tracking-[0.28em] text-cyan-200">
-              Match Found
-            </div>
-            <h1 className="mt-4 text-4xl font-black uppercase tracking-[0.08em] text-white">
-              1v1 Arena
-            </h1>
-            <p className="mt-5 text-sm font-bold uppercase leading-relaxed tracking-[0.14em] text-white/42">
-              Live camera feed with local face landmark detection. Green points are drawn over nose, eyes, cheeks, mouth, and chin.
-            </p>
+            <div className="text-xs font-black uppercase tracking-[0.28em] text-cyan-200">UNMOG Telemetry</div>
+            <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] text-white">{localScore.toFixed(2)}<span className="text-xl text-white/40"> / 10</span></h1>
+            <div className="mt-1 text-[11px] font-black uppercase tracking-[0.2em] text-white/45">Peak {peakLocal.toFixed(2)}</div>
 
-            <div className="mt-10 grid gap-3">
-              {[
-                ["Model", modelReady ? "Ready" : "Loading"],
-                ["Camera", cameraReady ? "Live" : "Pending"],
-                ["Overlay", modelReady && cameraReady ? "Active" : "Waiting"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between rounded-[18px] border border-white/10 bg-black/35 px-4 py-3"
-                >
-                  <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">
-                    {label}
-                  </span>
-                  <span className="text-sm font-black uppercase tracking-[0.16em] text-white">
-                    {value}
-                  </span>
-                </div>
-              ))}
+            <div className="mt-8 grid gap-2">
+              <FeatureRow label="Asymmetry"  v={pipeline.breakdown?.spatial.asymmetry ?? 0} />
+              <FeatureRow label="Mouth"      v={pipeline.breakdown?.spatial.mouthDistortion ?? 0} />
+              <FeatureRow label="Eye Chaos"  v={pipeline.breakdown?.spatial.eyeChaos ?? 0} />
+              <FeatureRow label="Chin"       v={pipeline.breakdown?.spatial.chinCompression ?? 0} />
+              <FeatureRow label="Head Angle" v={pipeline.breakdown?.spatial.headAngle ?? 0} />
+              <FeatureRow label="Motion"     v={pipeline.breakdown?.temporal.motionInstability ?? 0} />
+              <FeatureRow label="Volatility" v={pipeline.breakdown?.temporal.expressionVolatility ?? 0} />
+              <FeatureRow label="Commit"     v={pipeline.breakdown?.temporal.commitment ?? 0} />
+              <FeatureRow label="Audio"      v={pipeline.breakdown?.audio.energy ?? 0} />
+              <FeatureRow label="Pitch Var"  v={pipeline.breakdown?.audio.pitchVariation ?? 0} />
+            </div>
+
+            <div className="mt-6 flex items-center justify-between rounded-[18px] border border-white/10 bg-black/35 px-4 py-3">
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-white/40">Face Detected</span>
+              <span className={`text-sm font-black uppercase tracking-[0.16em] ${pipeline.hasFace ? "text-emerald-300" : "text-red-300"}`}>{pipeline.hasFace ? "Yes" : "No"}</span>
             </div>
 
             <Link
@@ -323,6 +332,54 @@ export default function LiveArena() {
           </aside>
         </section>
       </main>
+    </div>
+  );
+}
+
+function ScoreBar({ label, score, color }: { label: string; score: number; color: "emerald" | "violet" }) {
+  const pct = Math.max(0, Math.min(100, (score / 10) * 100));
+  const grad = color === "emerald"
+    ? "from-emerald-400 to-cyan-300"
+    : "from-violet-400 to-fuchsia-400";
+  return (
+    <div className="rounded-[18px] border border-white/15 bg-black/55 p-3 backdrop-blur-md">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-black uppercase tracking-[0.24em] text-white/55">{label}</span>
+        <span className="text-2xl font-black tracking-[-0.04em] text-white">{score.toFixed(1)}</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full bg-gradient-to-r ${grad} transition-all duration-150`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function FeatureRow({ label, v }: { label: string; v: number }) {
+  const pct = Math.max(0, Math.min(100, v * 100));
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-24 shrink-0 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">{label}</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
+        <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-8 text-right text-[10px] font-black tabular-nums text-white/55">{v.toFixed(2)}</span>
+    </div>
+  );
+}
+
+function EventBadge({ ev }: { ev: InstantEvent }) {
+  const map = {
+    opponent_laugh:   { Icon: Smile,        text: "OPPONENT LAUGHED — INSTANT WIN", color: "from-emerald-400 to-lime-300" },
+    double_chin_lock: { Icon: Skull,        text: "DOUBLE CHIN LOCK +200",          color: "from-amber-400 to-orange-400" },
+    mega_unmog:       { Icon: Zap,          text: "MEGA UNMOG x2",                  color: "from-fuchsia-400 to-violet-400" },
+    no_face:          { Icon: AlertOctagon, text: "OPPONENT FORFEIT",               color: "from-red-400 to-rose-400" },
+  } as const;
+  const cfg = map[ev.type];
+  const Icon = cfg.Icon;
+  return (
+    <div className={`flex items-center gap-2 rounded-full bg-gradient-to-r ${cfg.color} px-5 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] animate-in fade-in slide-in-from-top-2 duration-300`}>
+      <Icon className="h-4 w-4" />
+      {cfg.text}
     </div>
   );
 }
