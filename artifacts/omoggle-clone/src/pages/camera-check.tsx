@@ -206,22 +206,23 @@ export default function CameraCheck() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 font-mono">
-      <div className="w-full max-w-md">
-        <div className="bg-[#100d1f] border border-purple-500/20 rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(139,92,246,0.15)]">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 py-10 font-mono">
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_47%,rgba(88,28,135,0.18),transparent_36%),linear-gradient(180deg,rgba(0,0,0,0.2),#000_76%)]" />
+      <div className="relative z-10 w-full max-w-[584px]">
+        <div className="bg-[#100d1f] border border-purple-500/35 rounded-[18px] overflow-hidden shadow-[0_0_80px_rgba(139,92,246,0.22),inset_0_1px_0_rgba(255,255,255,0.04)]">
 
           {/* Header */}
-          <div className="px-8 pt-8 pb-4 text-center">
-            <h1 className="text-xl font-black uppercase tracking-[0.2em] text-purple-300 mb-1">
+          <div className="px-8 pt-12 pb-6 text-center">
+            <h1 className="text-[27px] font-black uppercase tracking-[0.34em] text-purple-300 mb-3 drop-shadow-[0_0_18px_rgba(216,180,254,0.35)]">
               Camera Access Check
             </h1>
-            <p className="text-[10px] uppercase tracking-[0.25em] text-white/30">
+            <p className="text-[13px] uppercase tracking-[0.42em] text-white/25">
               Short-lived session challenge
             </p>
           </div>
 
           {/* Video Panel */}
-          <div className="mx-6 mb-4 rounded-xl overflow-hidden bg-[#06040f] border border-white/5 aspect-video relative">
+          <div className="mx-8 mb-6 rounded-[22px] overflow-hidden bg-[#06040f] border border-white/5 aspect-video relative">
 
             {/* Live webcam — mirrored */}
             <video
@@ -240,10 +241,10 @@ export default function CameraCheck() {
             />
 
             {/* Corner brackets */}
-            <div className="absolute top-3 left-3 w-5 h-5 border-t-2 border-l-2 border-white/25" style={{ zIndex: 20 }} />
-            <div className="absolute top-3 right-3 w-5 h-5 border-t-2 border-r-2 border-white/25" style={{ zIndex: 20 }} />
-            <div className="absolute bottom-3 left-3 w-5 h-5 border-b-2 border-l-2 border-white/25" style={{ zIndex: 20 }} />
-            <div className="absolute bottom-3 right-3 w-5 h-5 border-b-2 border-r-2 border-white/25" style={{ zIndex: 20 }} />
+            <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-white/30" style={{ zIndex: 20 }} />
+            <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-white/30" style={{ zIndex: 20 }} />
+            <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-white/30" style={{ zIndex: 20 }} />
+            <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-white/30" style={{ zIndex: 20 }} />
 
             {/* Scan line (active non-done steps) */}
             {!isDone && step !== "preparing" && (
@@ -264,12 +265,12 @@ export default function CameraCheck() {
                       key="done"
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="flex items-center gap-2 bg-black/60 backdrop-blur-sm border border-green-400/30 rounded-full px-5 py-2"
+                      className="flex items-center gap-3 bg-[#33291f]/95 backdrop-blur-sm border border-green-400/35 rounded-full px-8 py-3 shadow-[0_12px_30px_rgba(0,0,0,0.32)]"
                     >
                       <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
-                      <span className="text-green-400 text-xs font-black uppercase tracking-[0.2em]">
+                      <span className="text-green-400 text-[13px] font-black uppercase tracking-[0.34em]">
                         Verified
                       </span>
                     </motion.div>
@@ -279,9 +280,9 @@ export default function CameraCheck() {
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      className="bg-black/70 backdrop-blur-sm rounded-full px-5 py-2"
+                      className="bg-black/75 backdrop-blur-sm rounded-full px-7 py-3"
                     >
-                      <span className="text-white text-xs font-black uppercase tracking-[0.15em]">
+                      <span className="text-white text-[12px] font-black uppercase tracking-[0.24em]">
                         {stepInstruction[step]}
                       </span>
                     </motion.div>
@@ -301,8 +302,8 @@ export default function CameraCheck() {
           </div>
 
           {/* Step progress bar */}
-          <div className="mx-6 mb-1">
-            <div className="h-px bg-white/8 rounded-full overflow-hidden">
+          <div className="mx-8 mb-2">
+            <div className="h-px bg-white/10 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-purple-500"
                 animate={{ width: isDone ? "100%" : `${(activeStepIndex / (STEPS.length - 1)) * 100}%` }}
@@ -312,15 +313,15 @@ export default function CameraCheck() {
           </div>
 
           {/* Step labels */}
-          <div className="mx-6 mb-5 flex justify-between">
+          <div className="mx-8 mb-8 flex justify-between">
             {STEPS.map((s, i) => (
               <span
                 key={s}
-                className={`text-[9px] uppercase tracking-widest font-bold transition-colors duration-300 ${
+                className={`text-[11px] uppercase tracking-[0.14em] font-bold transition-colors duration-300 ${
                   isDone || i < activeStepIndex
                     ? "text-purple-400"
                     : i === activeStepIndex
-                    ? "text-white"
+                    ? "text-purple-200"
                     : "text-white/20"
                 }`}
               >
@@ -330,12 +331,12 @@ export default function CameraCheck() {
           </div>
 
           {/* Disclaimer */}
-          <div className="mx-6 mb-5 text-center space-y-3">
-            <p className="text-[10px] text-white/35 leading-relaxed">
+          <div className="mx-10 mb-8 text-center space-y-5">
+            <p className="text-[13px] text-white/35 leading-relaxed">
               This camera check is an Unmoggle session gate for anti-abuse and age
               acknowledgment. It is not a government ID check or a durable proof of identity.
             </p>
-            <p className="text-[10px] text-white/25 leading-relaxed">
+            <p className="text-[13px] text-white/25 leading-relaxed">
               Facial landmarks are processed{" "}
               <span className="text-white/50 font-bold">locally in your browser</span>{" "}
               and are never uploaded. By starting the check you agree to the{" "}
@@ -347,20 +348,20 @@ export default function CameraCheck() {
           </div>
 
           {/* CTA */}
-          <div className="mx-6 mb-8 flex justify-center">
+          <div className="mx-8 mb-12 flex justify-center">
             {isDone ? (
               <motion.button
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 onClick={() => setLocation("/arena")}
-                className="px-12 py-3 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_50px_rgba(255,255,255,0.25)] transition-all hover:-translate-y-0.5"
+                className="min-w-[246px] px-12 py-4 bg-white text-black font-black uppercase tracking-[0.22em] text-sm rounded-full shadow-[0_0_42px_rgba(255,255,255,0.14)] hover:shadow-[0_0_60px_rgba(255,255,255,0.24)] transition-all hover:-translate-y-0.5"
               >
                 Enter Arena
               </motion.button>
             ) : (
               <button
                 onClick={() => setLocation("/")}
-                className="px-10 py-2.5 border border-white/10 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-black uppercase tracking-widest text-xs rounded-full transition-all"
+                className="min-w-[190px] px-10 py-3 border border-white/10 bg-white/5 hover:bg-white/10 text-white/50 hover:text-white font-black uppercase tracking-widest text-xs rounded-full transition-all"
               >
                 Exit
               </button>

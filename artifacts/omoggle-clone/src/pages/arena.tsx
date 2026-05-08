@@ -1,157 +1,342 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronLeft, CircleHelp, Trophy, User, X } from "lucide-react";
 import { Link } from "wouter";
-import { ChevronLeft, X, Flag } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
 
-export default function Arena() {
-  const [waitTime, setWaitTime] = useState(0);
-  const [searchingText, setSearchingText] = useState("Searching for opponent...");
+type LobbyCardProps = {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  accent: string;
+  hoverGlow: string;
+  hoverBorder: string;
+  featured?: boolean;
+  extra?: ReactNode;
+  href?: string;
+};
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+type RuleCardProps = {
+  icon: ReactNode;
+  title: string;
+  body: string;
+  pill: string;
+  tone: "purple" | "green" | "pink" | "cyan" | "yellow";
+};
 
-  useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      .then(stream => { 
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream; 
-        }
-      })
-      .catch(console.error);
-      
-    return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
+const ruleToneClasses: Record<RuleCardProps["tone"], string> = {
+  purple: "border-purple-500/80 shadow-[0_0_22px_rgba(168,85,247,0.14)] text-purple-300",
+  green: "border-green-500/80 shadow-[0_0_22px_rgba(34,197,94,0.13)] text-green-300",
+  pink: "border-rose-500/80 shadow-[0_0_22px_rgba(244,63,94,0.13)] text-rose-300",
+  cyan: "border-cyan-400/80 shadow-[0_0_22px_rgba(34,211,238,0.13)] text-cyan-300",
+  yellow: "border-yellow-400/80 shadow-[0_0_22px_rgba(250,204,21,0.12)] text-yellow-300",
+};
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setWaitTime(prev => prev + 1);
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const texts = ["Searching for opponent...", "Analyzing queue...", "Finding best match...", "Checking latency..."];
-    let i = 0;
-    const textTimer = setInterval(() => {
-      i = (i + 1) % texts.length;
-      setSearchingText(texts[i]);
-    }, 3000);
-    return () => clearInterval(textTimer);
-  }, []);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
+function RuleCard({ icon, title, body, pill, tone }: RuleCardProps) {
+  const toneClass = ruleToneClasses[tone];
 
   return (
-    <div className="h-[100dvh] w-full bg-black flex flex-col overflow-hidden font-mono">
-      {/* Top Bar */}
-      <header className="h-16 border-b border-white/10 bg-[#050505] flex items-center justify-between px-4 sm:px-8 z-10 shrink-0">
-        <Link href="/" className="flex items-center gap-2 text-white/50 hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer">
-          <ChevronLeft className="w-4 h-4" /> Leave Arena
-        </Link>
-        
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="font-black uppercase tracking-widest text-sm text-white">Live</span>
-          </div>
-        </div>
+    <div className={`relative min-h-[118px] rounded-[14px] border bg-black/45 px-4 py-3 ${toneClass}`}>
+      <div className="mb-2.5 flex h-8 items-center justify-center text-[2rem] leading-none">
+        {icon}
+      </div>
+      <h3 className="text-[15px] font-black uppercase leading-none tracking-[0.02em] text-white">
+        {title}
+      </h3>
+      <p className="mt-2 max-w-[220px] text-[12px] font-bold leading-[1.22] text-white/70">
+        {body}
+      </p>
+      <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[11px] font-black leading-none ${toneClass}`}>
+        {pill}
+      </div>
+    </div>
+  );
+}
 
-        <button className="text-white/30 hover:text-red-500 transition-colors">
-          <Flag className="w-5 h-5" />
+function HowToUnmogModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-3 py-3 backdrop-blur-sm">
+      <div className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[680px] overflow-y-auto rounded-[22px] border border-purple-500/85 bg-[#050710] p-4 shadow-[0_0_48px_rgba(168,85,247,0.28),inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-purple-300/75 transition hover:text-purple-200"
+          aria-label="Close how to unmog"
+        >
+          <X className="h-6 w-6" strokeWidth={2.3} />
         </button>
-      </header>
 
-      {/* Video Grid */}
-      <main className="flex-1 flex flex-col md:flex-row gap-4 p-4 bg-black overflow-hidden relative">
-        
-        {/* Opponent View - Searching UI */}
-        <div className="flex-1 bg-[#080810] rounded-2xl relative overflow-hidden flex flex-col border border-white/5 shadow-inner">
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none" />
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
-          
-          {/* Scan line effect */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="w-full h-2 bg-gradient-to-b from-transparent via-purple-500/10 to-transparent animate-scan-line" />
+        <div className="flex items-start gap-4 pr-8">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[12px] border border-purple-500/55 bg-purple-950/20 text-[2.65rem] shadow-[0_0_24px_rgba(168,85,247,0.2)]">
+            🃏
           </div>
-
-          <div className="absolute inset-0 flex flex-col items-center justify-center relative z-10">
-            <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
-              <motion.div
-                className="absolute inset-0 border border-purple-500/30 rounded-full"
-                animate={{ scale: [1, 2], opacity: [1, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-              />
-              <motion.div
-                className="absolute inset-0 border border-purple-500/20 rounded-full"
-                animate={{ scale: [1, 2], opacity: [1, 0] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 1 }}
-              />
-              <div className="w-12 h-12 bg-purple-500/20 rounded-full blur-md absolute" />
-              <div className="w-4 h-4 bg-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.8)]" />
-            </div>
-            
-            <motion.div 
-              key={searchingText}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              className="font-mono text-purple-300 uppercase font-bold tracking-[0.2em] text-sm mb-6 h-6"
-            >
-              {searchingText}
-            </motion.div>
-            
-            <div className="flex gap-6 text-xs text-white/50 uppercase tracking-widest bg-black/40 px-6 py-3 rounded-full border border-white/5">
-              <div className="flex flex-col items-center">
-                <span className="mb-1 text-white/30 text-[10px]">Queue</span>
-                <span className="text-white">2,847 in queue</span>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div className="flex flex-col items-center">
-                <span className="mb-1 text-white/30 text-[10px]">Wait Time</span>
-                <span className="text-white font-mono">{formatTime(waitTime)}</span>
-              </div>
-            </div>
+          <div>
+            <h2 className="text-[28px] font-black uppercase italic leading-none text-white">
+              How to <span className="text-purple-500">Unmog</span>
+            </h2>
+            <p className="mt-2 max-w-[480px] text-[12px] font-black uppercase leading-[1.25] tracking-[0.16em] text-purple-400">
+              Quick rules to help you unmog harder, get lower scores, and better clips
+            </p>
           </div>
         </div>
 
-        {/* My Video */}
-        <div className="flex-1 bg-[#111] rounded-2xl relative overflow-hidden border border-purple-500/20 animate-glow-pulse">
-          <video 
-            ref={videoRef} 
-            autoPlay 
-            muted 
-            playsInline 
-            className="absolute inset-0 w-full h-full object-cover -scale-x-100"
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <RuleCard
+            icon={<div className="relative w-full text-center"><span>😎</span><span className="absolute left-14 top-1 text-2xl text-purple-400">⌜</span><span className="absolute right-14 top-1 text-2xl text-purple-400">⌝</span></div>}
+            title="Be Unhinged"
+            body="Act weird, be loud, make faces, do anything to unmog your opponent."
+            pill="More chaos = lower score"
+            tone="purple"
           />
-          
-          <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 z-10 text-white flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            You (Live)
+          <RuleCard
+            icon={<div className="flex items-center justify-center gap-2 text-[1.45rem]"><span className="h-3 w-28 rounded-full bg-[linear-gradient(90deg,#22e96b,#f8e441,#ff3e6c)] shadow-[0_0_12px_rgba(34,233,107,0.3)]" /><span className="text-rose-400">↓ -ELO</span></div>}
+            title="Lower Is Better"
+            body="The goal is to get a LOWER jester score than your opponent."
+            pill="Unmog to win"
+            tone="green"
+          />
+          <RuleCard
+            icon={<div className="relative"><span>🤡</span><span className="absolute inset-x-[-12px] top-4 h-0.5 rotate-[-28deg] bg-rose-400" /></div>}
+            title="Don't Try Too Hard"
+            body="Trying to look good will mog you. Embrace the chaos."
+            pill="Trying = mogging"
+            tone="pink"
+          />
+          <RuleCard
+            icon={<div className="relative text-cyan-300"><span className="text-[2.6rem]">▭</span><span className="absolute left-2 top-0 text-[2.5rem]">╱</span></div>}
+            title="Camera Stays On"
+            body="No turning off, no covers. Full face. Full unmog."
+            pill="Always visible"
+            tone="cyan"
+          />
+          <RuleCard
+            icon={<span>🏆</span>}
+            title="Earn Your Title"
+            body="The worst, funniest, and silliest rise to the top."
+            pill="Climb the unmog leaderboard"
+            tone="yellow"
+          />
+          <RuleCard
+            icon={<span className="text-purple-400">↪</span>}
+            title="Clip & Share"
+            body="Best unmog moments get clips. Humiliate. Entertain. Go viral."
+            pill="Fame through failure"
+            tone="purple"
+          />
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-[12px] border border-purple-500/45 bg-purple-950/14 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="text-[2.4rem] leading-none">🃏</div>
+            <div>
+              <div className="text-[14px] font-black uppercase italic tracking-[0.05em] text-white">
+                Be the reason they lose.
+              </div>
+              <div className="text-[22px] font-black uppercase italic leading-none text-purple-500">
+                Unmog hard.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-11 min-w-[128px] rounded-[9px] border border-purple-400/70 bg-purple-600/70 px-5 text-[16px] font-black uppercase italic text-purple-100 shadow-[0_0_24px_rgba(168,85,247,0.34)] transition hover:bg-purple-500"
+          >
+            Got It ›
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerRankCard({ featured = false }: { featured?: boolean }) {
+  return (
+    <div
+      className={`mt-4 w-full rounded-[16px] border border-cyan-100/80 bg-[linear-gradient(145deg,rgba(79,102,112,0.48),rgba(25,36,42,0.8))] p-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_0_48px_rgba(80,240,255,0.08)] sm:mt-5 sm:p-3 ${
+        featured ? "max-w-[320px] sm:max-w-[380px]" : "max-w-[300px] sm:max-w-[340px]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 rounded-[12px] border border-cyan-100/70 bg-[#24353b]/80 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] sm:gap-3 sm:rounded-[14px] sm:px-3 sm:py-2">
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" />
+          <span className="text-[9px] font-black uppercase tracking-[0.16em] text-white sm:text-[11px] sm:tracking-[0.18em]">
+            Mogger #74
+          </span>
+        </div>
+        <span className="text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100 sm:text-[10px] sm:tracking-[0.14em]">
+          <span className="text-orange-500">Sub3</span> | 400 Elo
+        </span>
+      </div>
+
+      <div className="my-1.5 h-px bg-cyan-100/35 sm:my-2" />
+
+      <div className="grid grid-cols-2 gap-1.5">
+        {[
+          ["Season Record", "0W - 0L"],
+          ["World Standing", "#273,269"],
+          ["Peak", "400 Elo"],
+          ["Next Rank", "LTN"],
+        ].map(([label, value], index) => (
+          <div
+            key={label}
+            className="rounded-[9px] border border-white/10 bg-white/[0.035] px-2.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:rounded-[10px] sm:px-3 sm:py-1.5"
+          >
+            <div className="text-[8px] font-black uppercase tracking-[0.12em] text-white/85 sm:text-[9px] sm:tracking-[0.14em]">
+              {label}
+            </div>
+            <div
+              className={`mt-0.5 text-[11px] font-black uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.14em] ${
+                index >= 2 ? "text-cyan-200" : "text-white"
+              }`}
+            >
+              {index === 3 ? <span className="text-emerald-300">LTN</span> : value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-2 h-2 overflow-hidden rounded-full border border-cyan-100/20 bg-[#13242d] sm:mt-2.5 sm:h-2.5">
+        <div className="h-full w-[80%] rounded-full bg-[linear-gradient(90deg,#00d7ff,#63fff1)] shadow-[0_0_18px_rgba(34,211,238,0.75)]" />
+      </div>
+
+      <div className="mt-1.5 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.16em] text-white sm:mt-2 sm:text-[11px] sm:tracking-[0.18em]">
+        <span>80%</span>
+        <span>101 Elo Needed</span>
+      </div>
+    </div>
+  );
+}
+
+function LobbyPanel({
+  icon,
+  title,
+  subtitle,
+  accent,
+  hoverGlow,
+  hoverBorder,
+  featured = false,
+  extra,
+  href,
+}: LobbyCardProps) {
+  const content = (
+    <section
+      className={`group relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[38px] border bg-[linear-gradient(145deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] text-center backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_28px_90px_rgba(0,0,0,0.42)] ${hoverBorder} ${
+        featured
+          ? "min-h-[300px] border-cyan-100/35 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_26px_100px_rgba(34,211,238,0.08),0_20px_80px_rgba(0,0,0,0.36)] sm:min-h-[360px] sm:px-7 sm:py-7 lg:min-h-0"
+          : "min-h-[220px] border-white/18 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.34)] sm:min-h-[300px] sm:px-7 sm:py-7 lg:min-h-0"
+      }`}
+    >
+      <div className={`absolute inset-0 opacity-70 ${accent}`} />
+      <div
+        className={`pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-55 ${hoverGlow}`}
+      />
+      <div
+        className={`pointer-events-none absolute inset-[-18%] opacity-0 blur-3xl transition duration-300 group-hover:opacity-100 ${hoverGlow}`}
+      />
+      <div
+        className={`pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-35 ${hoverGlow}`}
+      />
+      <div
+        className={`pointer-events-none absolute inset-x-6 bottom-0 h-px opacity-0 transition duration-300 group-hover:opacity-100 ${hoverGlow}`}
+      />
+      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
+
+      <div
+        className={`relative z-10 flex items-center justify-center text-white/70 drop-shadow-[0_18px_35px_rgba(0,0,0,0.4)] ${
+          featured ? "mb-4 h-12 w-12 text-[3rem] sm:mb-6 sm:h-16 sm:w-16 sm:text-[3.8rem]" : "mb-4 h-11 w-11 text-[2.6rem] sm:mb-7 sm:h-14 sm:w-14 sm:text-[3.4rem]"
+        }`}
+      >
+        {icon}
+      </div>
+      <h2
+        className={`relative z-10 font-black uppercase tracking-[-0.01em] text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.16)] ${
+          featured ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl"
+        }`}
+      >
+        {title}
+      </h2>
+      <p className="relative z-10 mt-3 text-xs font-black uppercase tracking-[0.12em] text-white/38 sm:mt-4 sm:text-base">
+        {subtitle}
+      </p>
+      {extra}
+    </section>
+  );
+
+  if (!href) return content;
+
+  return (
+    <Link href={href} className="block h-full cursor-pointer">
+      {content}
+    </Link>
+  );
+}
+
+export default function Arena() {
+  const [showHowToUnmog, setShowHowToUnmog] = useState(false);
+  const panels: LobbyCardProps[] = [
+    {
+      icon: <Trophy className="h-16 w-16 fill-amber-400/35 text-amber-400" strokeWidth={1.6} />,
+      title: "Global Rank",
+      subtitle: "Top 100 Moggers",
+      accent: "bg-[radial-gradient(circle_at_50%_32%,rgba(255,194,73,0.09),transparent_46%)]",
+      hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(250,204,21,0.72),rgba(250,204,21,0.32)_42%,rgba(250,204,21,0.08)_68%,transparent_82%)]",
+      hoverBorder: "hover:border-yellow-300/85 hover:shadow-[0_0_72px_rgba(250,204,21,0.22),inset_0_1px_0_rgba(255,255,255,0.12)]",
+      href: "/leaderboard",
+    },
+    {
+      icon: <span className="text-[4rem] leading-none">⚔️</span>,
+      title: "1v1 Arena",
+      subtitle: "Ranked Matchmaking",
+      accent: "bg-[radial-gradient(circle_at_50%_78%,rgba(101,231,255,0.11),transparent_42%)]",
+      hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(168,85,247,0.82),rgba(34,211,238,0.32)_44%,rgba(168,85,247,0.1)_70%,transparent_84%)]",
+      hoverBorder: "hover:border-purple-400/90 hover:shadow-[0_0_76px_rgba(168,85,247,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]",
+      featured: true,
+      href: "/arena/1v1",
+      extra: <PlayerRankCard featured />,
+    },
+    {
+      icon: <User className="h-16 w-16 fill-sky-300/35 text-sky-300/55" strokeWidth={1.5} />,
+      title: "The Lab",
+      subtitle: "Solo Calibration",
+      accent: "bg-[radial-gradient(circle_at_50%_100%,rgba(135,91,180,0.15),transparent_50%)]",
+      hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(34,211,238,0.78),rgba(56,189,248,0.32)_42%,rgba(59,130,246,0.1)_70%,transparent_84%)]",
+      hoverBorder: "hover:border-cyan-400/90 hover:shadow-[0_0_76px_rgba(34,211,238,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]",
+    },
+  ];
+
+  return (
+    <div className="relative min-h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#060606] font-mono text-white lg:h-[100dvh] lg:overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(13,24,28,0.72),rgba(12,12,14,0.92)_34%,rgba(17,12,21,0.94)_72%,rgba(11,10,13,1))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_13%,rgba(255,193,7,0.09),transparent_22%),radial-gradient(circle_at_99%_0%,rgba(120,86,255,0.16),transparent_18%),radial-gradient(circle_at_68%_62%,rgba(128,41,173,0.14),transparent_38%)]" />
+      <div className="absolute inset-0 opacity-[0.04] [background-image:linear-gradient(rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:44px_44px]" />
+
+      <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[1640px] flex-col px-3 pt-3 pb-8 sm:px-8 sm:pt-6 sm:pb-10 lg:h-full lg:min-h-0 lg:px-12 lg:py-6">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-3 sm:h-14">
+          <Link
+            href="/"
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-white/12 bg-white/6 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/78 shadow-[0_0_24px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md transition hover:border-white/22 hover:text-white sm:h-11 sm:px-4 sm:text-xs"
+          >
+            <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            Back
+          </Link>
+
+          <button
+            onClick={() => setShowHowToUnmog(true)}
+            className="inline-flex h-9 w-fit items-center gap-2 rounded-full border border-cyan-100/35 bg-cyan-950/10 px-3 text-[10px] font-black uppercase tracking-[0.22em] text-white/82 shadow-[0_0_32px_rgba(103,232,249,0.08),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md sm:h-12 sm:gap-3 sm:px-5 sm:text-sm sm:tracking-[0.28em]"
+          >
+            How to Unmog
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-cyan-100/35 text-cyan-100 sm:h-7 sm:w-7">
+              <CircleHelp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            </span>
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 items-center py-2 sm:py-5 lg:py-7">
+          <div className="grid h-full max-h-[calc(100dvh-5rem)] grid-cols-1 items-stretch gap-3 sm:max-h-[calc(100dvh-7rem)] sm:gap-5 lg:grid-cols-[0.88fr_1.08fr_0.88fr] lg:gap-7 xl:gap-8">
+          {panels.map((panel) => (
+            <LobbyPanel key={panel.title} {...panel} />
+          ))}
           </div>
         </div>
       </main>
-
-      {/* Bottom Action Bar */}
-      <footer className="h-24 shrink-0 bg-[#050505] border-t border-white/5 flex items-center justify-center px-4 z-10 relative">
-        <Link href="/">
-          <Button 
-            size="lg"
-            className="h-14 px-8 bg-white/5 text-white hover:bg-white/10 rounded-full uppercase font-bold tracking-widest text-sm flex items-center gap-2 w-full max-w-[200px] transition-all border border-white/10 hover:border-white/20"
-          >
-            Cancel <X className="w-4 h-4" />
-          </Button>
-        </Link>
-      </footer>
+      {showHowToUnmog && <HowToUnmogModal onClose={() => setShowHowToUnmog(false)} />}
     </div>
   );
 }

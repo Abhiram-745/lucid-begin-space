@@ -9,13 +9,15 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `DATABASE_URL` — Supabase Postgres runtime connection string
+- Optional env: `DATABASE_DIRECT_URL` — direct Supabase Postgres URL for Drizzle schema pushes/migrations
+- Optional env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — browser-safe Supabase client config
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- DB: Supabase PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
@@ -38,7 +40,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Keep Supabase `service_role` and secret keys out of `VITE_*` variables; Vite exposes those values to the browser.
+- Use Supabase pooler session mode for the long-running Express API when IPv4 support is needed. Use `DATABASE_DIRECT_URL` for Drizzle schema pushes when your environment can reach the direct database host.
 
 ## Pointers
 

@@ -24,6 +24,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /db/healthz:
+    get:
+      operationId: databaseHealthCheck
+      tags: [health]
+      summary: Database health check
+      description: Verifies that the API server can query Supabase Postgres
+      responses:
+        "200":
+          description: Database connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseHealthStatus"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +46,13 @@ components:
           type: string
       required:
         - status
-
+    DatabaseHealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+        database:
+          type: string
+      required:
+        - status
+        - database

@@ -14,3 +14,12 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Verifies that the API server can query Supabase Postgres
+ * @summary Database health check
+ */
+export const DatabaseHealthCheckResponse = zod.object({
+  status: zod.string(),
+  database: zod.string(),
+});

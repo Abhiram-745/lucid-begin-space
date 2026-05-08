@@ -1,6 +1,6 @@
 import { ChevronLeft, Info } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 
 const MOCK_LEADERBOARD = [
   { rank: 1, name: "nightwing_kv", score: 24500, avatar: "N", tier: "ADAM" },
@@ -61,95 +61,33 @@ const TIERS = [
   { emoji: "🔵", name: "MOLECULE", range: "≤ -1 ELO", color: "bg-zinc-500" },
 ];
 
-function Countdown() {
-  const targetDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 23);
-    d.setHours(d.getHours() + 7);
-    return d;
-  }, []);
-
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      const diff = targetDate.getTime() - now.getTime();
-      if (diff <= 0) return;
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / 1000 / 60) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-      });
-    };
-    update();
-    const timer = setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
-  const pad = (n: number) => n.toString().padStart(2, '0');
-
-  return (
-    <div className="flex items-center gap-4 text-5xl font-black tracking-tighter tabular-nums drop-shadow-md">
-      <div className="flex flex-col items-center">
-        <span className="text-white">{pad(timeLeft.days)}</span>
-        <span className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Days</span>
-      </div>
-      <span className="text-white/20 pb-4">:</span>
-      <div className="flex flex-col items-center">
-        <span className="text-white">{pad(timeLeft.hours)}</span>
-        <span className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Hours</span>
-      </div>
-      <span className="text-white/20 pb-4">:</span>
-      <div className="flex flex-col items-center">
-        <span className="text-white">{pad(timeLeft.minutes)}</span>
-        <span className="text-[10px] text-white/50 uppercase tracking-widest mt-1">Minutes</span>
-      </div>
-      <span className="text-white/20 pb-4">:</span>
-      <div className="flex flex-col items-center text-purple-400">
-        <span>{pad(timeLeft.seconds)}</span>
-        <span className="text-[10px] text-purple-400/70 uppercase tracking-widest mt-1">Seconds</span>
-      </div>
-    </div>
-  );
-}
-
 export default function Leaderboard() {
   const [activeTab, setActiveTab] = useState<"global" | "season">("global");
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    window.location.assign("/arena");
+  };
 
   return (
     <div className="min-h-screen bg-[#050505] p-4 sm:p-8 flex flex-col items-center font-mono">
       <div className="w-full max-w-6xl">
         <div className="flex items-center justify-between mb-8 mt-4">
-          <Link href="/" className="flex items-center gap-2 text-white/50 hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-white/50 hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer"
+          >
             <ChevronLeft className="w-4 h-4" /> Back to Arena
-          </Link>
+          </button>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Main Content */}
           <div className="flex-1 flex flex-col">
-            {/* Season Countdown */}
-            <div className="bg-[#0d0d1a] border border-white/10 rounded-[2rem] p-8 mb-8 relative overflow-hidden shadow-2xl">
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="w-full h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent absolute top-0" />
-                <div className="w-full h-2 bg-gradient-to-b from-transparent via-purple-500/10 to-transparent animate-scan-line absolute" />
-              </div>
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <div className="text-xs text-white/50 font-bold uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Season Ends In
-                  </div>
-                  <Countdown />
-                  <div className="text-[10px] text-white/40 mt-6 uppercase tracking-widest">Ranks reset every month</div>
-                </div>
-                <button className="px-8 py-3 rounded-full border border-white/20 bg-white/5 text-white font-bold uppercase text-xs tracking-widest hover:bg-white/10 transition-all hover:-translate-y-0.5">
-                  View Rewards
-                </button>
-              </div>
-            </div>
-
             {/* Tabs */}
             <div className="flex gap-4 mb-8">
               <button 

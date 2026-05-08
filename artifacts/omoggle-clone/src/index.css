@@ -161,6 +161,7 @@
 @layer base {
   * {
     @apply border-border;
+    caret-color: transparent;
   }
   body {
     @apply font-mono antialiased bg-background text-foreground;
