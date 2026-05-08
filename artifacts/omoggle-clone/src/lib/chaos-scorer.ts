@@ -290,18 +290,20 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  asymmetry: 0.9,
+  // Static face-shape signals get less weight (too easy to exploit by
+  // sitting still with an asymmetric face). Performance signals get more.
+  asymmetry: 0.45,
   mouthDistortion: 1.4,
   eyeChaos: 1.1,
-  chinCompression: 0.8,
-  headAngle: 0.9,
-  expressionVolatility: 1.2,
-  motionInstability: 1.0,
+  chinCompression: 0.9,
+  headAngle: 0.7,
+  expressionVolatility: 1.7,
+  motionInstability: 1.4,
   audioEnergy: 1.1,
   audioPitch: 0.6,
   audioEntropy: 0.4,
-  audioSpike: 0.5,
-  commitment: 1.3,
+  audioSpike: 0.6,
+  commitment: 1.9,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -334,8 +336,13 @@ export function scoreFromFeatures(
   const exaggerated = Math.pow(norm01, 0.78);
   const target = exaggerated * 10;
 
-  // Smooth toward target so the number doesn't twitch.
-  const score = lerp(prevScore, target, 0.25);
+  // Asymmetric smoothing + spike clamp: react fast on sustained increases,
+  // fall slowly so brief noise spikes don't whiplash the score.
+  const delta = target - prevScore;
+  const maxJump = 1.2;            // hard cap per-frame jump (out of 10)
+  const clamped = Math.max(-maxJump, Math.min(maxJump, delta));
+  const alpha = clamped > 0 ? 0.22 : 0.12;
+  const score = prevScore + clamped * alpha;
 
   return { spatial: s, temporal: t, audio: a, score };
 }
