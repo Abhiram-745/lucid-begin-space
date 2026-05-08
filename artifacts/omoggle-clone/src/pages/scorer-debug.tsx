@@ -419,7 +419,8 @@ export default function ScorerDebug() {
               />
             </div>
 
-            {/* Big score */}
+            {/* Big score — only while a face is locked */}
+            {hasFace ? (
             <div className="absolute left-6 top-6 rounded-[20px] border border-white/15 bg-black/60 px-5 py-3 backdrop-blur-md">
               <div className="text-[10px] font-black uppercase tracking-[0.28em] text-white/45">
                 UNMOG score
@@ -431,9 +432,22 @@ export default function ScorerDebug() {
                 / 10
               </div>
             </div>
+            ) : (
+              <div className="absolute left-6 top-6 rounded-[20px] border border-white/15 bg-black/60 px-5 py-3 backdrop-blur-md">
+                <div className="text-[10px] font-black uppercase tracking-[0.28em] text-white/45">
+                  Awaiting subject
+                </div>
+                <div className="mt-1 text-2xl font-black tracking-[-0.04em] text-white/35">
+                  NO FACE
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-white/30">
+                  Position face in frame
+                </div>
+              </div>
+            )}
 
             {/* Scan readouts */}
-            {breakdown && breakdown.readouts && breakdown.emotion && breakdown.structure && (
+            {hasFace && breakdown && breakdown.readouts && breakdown.emotion && breakdown.structure && (
               <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
                 <ReadoutRow
                   label="Chaos Energy"
