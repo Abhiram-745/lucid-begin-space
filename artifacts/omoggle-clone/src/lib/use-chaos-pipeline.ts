@@ -8,30 +8,27 @@ import {
   type ChaosBreakdown,
 } from "./chaos-scorer";
 
-let landmarkerSingleton: FaceLandmarker | null = null;
-let landmarkerLoading: Promise<FaceLandmarker> | null = null;
-
-async function getLandmarker(): Promise<FaceLandmarker> {
-  if (landmarkerSingleton) return landmarkerSingleton;
-  if (!landmarkerLoading) {
-    landmarkerLoading = (async () => {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-      );
-      const lm = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath:
-            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-          delegate: "GPU",
-        },
-        runningMode: "VIDEO",
-        numFaces: 1,
-      });
-      landmarkerSingleton = lm;
-      return lm;
-    })();
+let visionLoader: Promise<Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>> | null = null;
+function getVision() {
+  if (!visionLoader) {
+    visionLoader = FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+    );
   }
-  return landmarkerLoading;
+  return visionLoader;
+}
+
+async function createLandmarker(): Promise<FaceLandmarker> {
+  const vision = await getVision();
+  return FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO",
+    numFaces: 1,
+  });
 }
 
 export interface PipelineState {
@@ -90,7 +87,7 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
     let cancelled = false;
     let landmarker: FaceLandmarker | null = null;
 
-    getLandmarker().then((lm) => {
+    createLandmarker().then((lm) => {
       if (cancelled) return;
       landmarker = lm;
       setReady(true);
