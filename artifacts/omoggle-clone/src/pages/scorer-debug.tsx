@@ -10,9 +10,53 @@ import {
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
 
-const KEY_LANDMARKS = [
-  10, 33, 133, 362, 263, 1, 61, 291, 152, 234, 454, 13, 14, 159, 145, 386, 374,
+/* Smoothed contour paths through subsets of the FaceMesh vertex set.
+ * Indices chosen to draw clean curves with no internal noise. */
+const CONTOURS: number[][] = [
+  // jawline (left ear -> chin -> right ear)
+  [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454],
+  // left brow
+  [70, 63, 105, 66, 107],
+  // right brow
+  [336, 296, 334, 293, 300],
+  // nose bridge
+  [168, 6, 197, 195, 5, 4, 1],
+  // left eye outline
+  [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7, 33],
+  // right eye outline
+  [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249, 263],
+  // outer mouth
+  [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61],
+  // inner mouth
+  [78, 81, 13, 311, 308, 402, 14, 178, 78],
 ];
+const NODE_LANDMARKS = [33, 133, 362, 263, 1, 61, 291, 13, 14, 152, 10, 234, 454];
+
+/** Cool-blue → purple → red-pink gradient stop at given chaos [0..1] */
+function chaosColor(t: number, alpha = 1) {
+  // 3-stop gradient: cyan(190°) -> purple(285°) -> hot pink(335°)
+  const h = t < 0.5 ? 190 + (285 - 190) * (t / 0.5) : 285 + (335 - 285) * ((t - 0.5) / 0.5);
+  const s = 90;
+  const l = 55 + t * 10;
+  return `hsla(${h.toFixed(1)}, ${s}%, ${l}%, ${alpha})`;
+}
+
+/** Catmull-Rom-ish smooth stroke through a sequence of points. */
+function strokeSmooth(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const mx = (p0.x + p1.x) / 2;
+    const my = (p0.y + p1.y) / 2;
+    ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
+  }
+  const last = pts[pts.length - 1];
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+}
 
 function Bar({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
@@ -181,22 +225,118 @@ export default function ScorerDebug() {
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
 
-          // Overlay. The wrapping container mirrors BOTH video and canvas,
-          // so we draw landmarks in raw (un-mirrored) source coordinates.
-          for (const idx of KEY_LANDMARKS) {
+          // ---- Biometric scan overlay ---------------------------------
+          // The wrapping container mirrors video + canvas together, so we
+          // draw in raw (un-mirrored) source coordinates.
+          const t = Math.min(1, result2.score / 10);
+          const time = performance.now() / 1000;
+
+          // 1. Face bounding box (for scan line + framing brackets)
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of lm) {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+          }
+          const bx = minX * w, by = minY * h;
+          const bw = (maxX - minX) * w, bh = (maxY - minY) * h;
+          const padX = bw * 0.12, padY = bh * 0.10;
+
+          // 2. Corner brackets
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = chaosColor(t, 0.85);
+          ctx.shadowColor = chaosColor(t, 0.9);
+          ctx.shadowBlur = 10 + t * 18;
+          const bracket = Math.min(bw, bh) * 0.18;
+          const bx0 = bx - padX, by0 = by - padY;
+          const bx1 = bx + bw + padX, by1 = by + bh + padY;
+          const corners: Array<[number, number, number, number]> = [
+            [bx0, by0, +1, +1], [bx1, by0, -1, +1],
+            [bx0, by1, +1, -1], [bx1, by1, -1, -1],
+          ];
+          for (const [cx0, cy0, sx, sy] of corners) {
+            ctx.beginPath();
+            ctx.moveTo(cx0, cy0 + sy * bracket);
+            ctx.lineTo(cx0, cy0);
+            ctx.lineTo(cx0 + sx * bracket, cy0);
+            ctx.stroke();
+          }
+
+          // 3. Smooth glowing contours along facial regions
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          for (const path of CONTOURS) {
+            const pts = path.map((i) => ({ x: lm[i].x * w, y: lm[i].y * h }));
+            // Outer glow pass
+            ctx.lineWidth = 4 + t * 3;
+            ctx.strokeStyle = chaosColor(t, 0.18);
+            ctx.shadowBlur = 14 + t * 22;
+            strokeSmooth(ctx, pts);
+            // Crisp inner stroke
+            ctx.lineWidth = 1.1;
+            ctx.strokeStyle = chaosColor(t, 0.95);
+            ctx.shadowBlur = 6;
+            strokeSmooth(ctx, pts);
+          }
+
+          // 4. Simplified mesh — connect key region anchors
+          const meshLinks: Array<[number, number]> = [
+            [33, 133], [362, 263],          // eyes
+            [133, 1], [362, 1],             // eye->nose
+            [1, 61], [1, 291],              // nose->mouth corners
+            [61, 291],                      // mouth line
+            [61, 152], [291, 152],          // mouth->chin
+            [234, 152], [454, 152],         // jaw->chin
+            [234, 33], [454, 263],          // jaw->eye
+          ];
+          ctx.lineWidth = 0.6;
+          ctx.strokeStyle = chaosColor(t, 0.35);
+          ctx.shadowBlur = 4;
+          for (const [a, b] of meshLinks) {
+            ctx.beginPath();
+            ctx.moveTo(lm[a].x * w, lm[a].y * h);
+            ctx.lineTo(lm[b].x * w, lm[b].y * h);
+            ctx.stroke();
+          }
+
+          // 5. Pulsing landmark nodes
+          const pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
+          for (const idx of NODE_LANDMARKS) {
             const p = lm[idx];
             if (!p) continue;
-            const x = p.x * w;
-            const y = p.y * h;
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(168,85,247,0.35)";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(x, y, 2.4, 0, Math.PI * 2);
-            ctx.fillStyle = "#22e96b";
-            ctx.fill();
+            const x = p.x * w, y = p.y * h;
+            const r = 2.2 + pulse * 1.4 + t * 1.6;
+            ctx.shadowBlur = 12 + t * 16;
+            ctx.shadowColor = chaosColor(t, 0.9);
+            ctx.fillStyle = chaosColor(t, 0.25);
+            ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = chaosColor(t, 1);
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
           }
+
+          // 6. Horizontal scan line sweeping across face bbox
+          const sweep = (Math.sin(time * 1.3) * 0.5 + 0.5);
+          const scanY = by0 + sweep * (by1 - by0);
+          const grad = ctx.createLinearGradient(bx0, scanY, bx1, scanY);
+          grad.addColorStop(0, chaosColor(t, 0));
+          grad.addColorStop(0.5, chaosColor(t, 0.9));
+          grad.addColorStop(1, chaosColor(t, 0));
+          ctx.shadowBlur = 18 + t * 22;
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(bx0, scanY);
+          ctx.lineTo(bx1, scanY);
+          ctx.stroke();
+
+          // 7. High-chaos glitch tear
+          if (t > 0.7 && Math.random() < 0.25) {
+            const ty = by0 + Math.random() * (by1 - by0);
+            ctx.fillStyle = chaosColor(t, 0.18);
+            ctx.shadowBlur = 0;
+            ctx.fillRect(bx0, ty, bx1 - bx0, 2);
+          }
+
+          ctx.shadowBlur = 0;
         }
       } catch {
         // skip frame
@@ -291,49 +431,49 @@ export default function ScorerDebug() {
           {/* Live features */}
           <aside className="rounded-[34px] border border-white/12 bg-white/[0.045] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.32)] backdrop-blur-md">
             <div className="text-[10px] font-black uppercase tracking-[0.28em] text-fuchsia-300">
-              Feature breakdown
+              Biometric readings
             </div>
             <h1 className="mt-3 text-2xl font-black uppercase tracking-[0.10em] text-white">
-              Realtime Chaos
+              Chaos Telemetry
             </h1>
             <p className="mt-3 text-[11px] font-bold uppercase leading-relaxed tracking-[0.12em] text-white/40">
-              Performative scoring only. No identity, no demographics.
+              Performative biometrics only. No identity, no demographics.
             </p>
 
             <div className="mt-6 space-y-4">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Spatial
+                  Spatial · facial geometry
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Asymmetry" value={breakdown?.spatial.asymmetry ?? 0} />
-                  <Bar label="Mouth distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
-                  <Bar label="Eye chaos" value={breakdown?.spatial.eyeChaos ?? 0} />
-                  <Bar label="Chin compression" value={breakdown?.spatial.chinCompression ?? 0} />
-                  <Bar label="Head angle" value={breakdown?.spatial.headAngle ?? 0} />
+                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} />
+                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
+                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} />
+                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} />
+                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} />
                 </div>
               </div>
 
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Temporal
+                  Temporal · motion over time
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Volatility" value={breakdown?.temporal.expressionVolatility ?? 0} />
-                  <Bar label="Motion" value={breakdown?.temporal.motionInstability ?? 0} />
-                  <Bar label="Commitment" value={breakdown?.temporal.commitment ?? 0} />
+                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} />
+                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} />
+                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} />
                 </div>
               </div>
 
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Audio
+                  Audio · vocal disruption
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Energy" value={breakdown?.audio.energy ?? 0} />
-                  <Bar label="Pitch variation" value={breakdown?.audio.pitchVariation ?? 0} />
+                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} />
+                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} />
                   <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} />
-                  <Bar label="Spike" value={breakdown?.audio.spike ?? 0} />
+                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} />
                 </div>
               </div>
             </div>

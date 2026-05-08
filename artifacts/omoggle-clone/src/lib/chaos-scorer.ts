@@ -36,6 +36,43 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 /** Map a raw measurement into [0,1] with a soft saturating curve. */
 const norm = (v: number, lo: number, hi: number) => clamp01((v - lo) / (hi - lo));
 
+/* ---------- pose normalization ----------
+ * Rotate, translate, and scale landmarks into a canonical frame so that
+ *  - the eye-line is horizontal (roll = 0)
+ *  - the face center is at the origin
+ *  - the inter-ocular distance is 1
+ * This makes downstream features invariant to where the user sits or how
+ * they tilt their head, which is the #1 source of "random" score swings.
+ * The pre-normalization roll/yaw is returned separately so headAngle can
+ * still reward intentional head movement.
+ */
+export interface NormalizedFace {
+  points: Pt[];
+  roll: number;       // radians, original eye-line tilt
+  yawProxy: number;   // nose horizontal offset / eye span, pre-normalization
+  eyeSpan: number;    // original inter-ocular distance (scale)
+}
+
+export function normalizeLandmarks(lm: Pt[]): NormalizedFace {
+  const lEye = lm[L.leftEyeOut];
+  const rEye = lm[L.rightEyeOut];
+  const eyeSpan = dist(lEye, rEye) || 1e-6;
+  const cx = (lm[L.foreheadCenter].x + lm[L.chin].x) / 2;
+  const cy = (lm[L.foreheadCenter].y + lm[L.chin].y) / 2;
+  const roll = Math.atan2(rEye.y - lEye.y, rEye.x - lEye.x);
+  const yawProxy = (lm[L.noseTip].x - cx) / eyeSpan;
+  const cos = Math.cos(-roll);
+  const sin = Math.sin(-roll);
+  const points: Pt[] = new Array(lm.length);
+  for (let i = 0; i < lm.length; i++) {
+    const p = lm[i];
+    const dx = (p.x - cx) / eyeSpan;
+    const dy = (p.y - cy) / eyeSpan;
+    points[i] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos, z: p.z };
+  }
+  return { points, roll, yawProxy, eyeSpan };
+}
+
 /* ---------- spatial features ---------- */
 
 export interface SpatialFeatures {
@@ -47,11 +84,13 @@ export interface SpatialFeatures {
 }
 
 export function extractSpatial(lm: Pt[]): SpatialFeatures {
-  // Inter-ocular distance — scale invariant denominator.
-  const eyeSpan = dist(lm[L.leftEyeOut], lm[L.rightEyeOut]) || 1e-6;
+  // Work in canonical (centered, rotated, unit-eye-span) space so features
+  // describe the *expression* rather than head pose or camera framing.
+  const nf = normalizeLandmarks(lm);
+  const p = nf.points;
+  const eyeSpan = 1; // by definition after normalization
 
-  /* asymmetry — compare left vs right paired distances from face center axis */
-  const cx = (lm[L.foreheadCenter].x + lm[L.chin].x) / 2;
+  /* asymmetry — compare left vs right paired distances from face midline (x=0) */
   const pairs: Array<[number, number]> = [
     [L.leftEyeOut, L.rightEyeOut],
     [L.cheekLeft, L.cheekRight],
@@ -61,17 +100,17 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   ];
   let asymSum = 0;
   for (const [a, b] of pairs) {
-    const dxA = Math.abs(lm[a].x - cx);
-    const dxB = Math.abs(lm[b].x - cx);
-    const dyDiff = Math.abs(lm[a].y - lm[b].y);
+    const dxA = Math.abs(p[a].x);
+    const dxB = Math.abs(p[b].x);
+    const dyDiff = Math.abs(p[a].y - p[b].y);
     asymSum += Math.abs(dxA - dxB) + dyDiff;
   }
-  const asymmetry = norm(asymSum / eyeSpan, 0.05, 0.6);
+  const asymmetry = norm(asymSum, 0.05, 0.6);
 
   /* mouth distortion — vertical opening + horizontal stretch beyond resting */
-  const mouthOpen = dist(lm[L.mouthTop], lm[L.mouthBot]) / eyeSpan;
-  const mouthWide = dist(lm[L.mouthLeft], lm[L.mouthRight]) / eyeSpan;
-  const lipStretch = dist(lm[L.upperLipTop], lm[L.lowerLipBot]) / eyeSpan;
+  const mouthOpen = dist(p[L.mouthTop], p[L.mouthBot]);
+  const mouthWide = dist(p[L.mouthLeft], p[L.mouthRight]);
+  const lipStretch = dist(p[L.upperLipTop], p[L.lowerLipBot]);
   const mouthDistortion = clamp01(
     0.55 * norm(mouthOpen, 0.05, 0.55) +
     0.25 * norm(mouthWide, 0.55, 1.05) +
@@ -79,8 +118,8 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   );
 
   /* eye chaos — wide-open / squint mismatch between eyes */
-  const leftOpen = dist(lm[L.leftEyeTop], lm[L.leftEyeBot]) / eyeSpan;
-  const rightOpen = dist(lm[L.rightEyeTop], lm[L.rightEyeBot]) / eyeSpan;
+  const leftOpen = dist(p[L.leftEyeTop], p[L.leftEyeBot]);
+  const rightOpen = dist(p[L.rightEyeTop], p[L.rightEyeBot]);
   const eyeMismatch = Math.abs(leftOpen - rightOpen);
   const eyeExtreme = Math.max(
     norm(Math.max(leftOpen, rightOpen), 0.10, 0.22),  // bug-eyed
@@ -89,16 +128,15 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   const eyeChaos = clamp01(0.6 * norm(eyeMismatch, 0.005, 0.06) + 0.4 * eyeExtreme);
 
   /* chin compression — chin pulled toward chest (small forehead->chin Y span vs eye span) */
-  const verticalSpan = Math.abs(lm[L.chin].y - lm[L.foreheadCenter].y);
-  const compressionRatio = verticalSpan / eyeSpan; // small => squished
+  const verticalSpan = Math.abs(p[L.chin].y - p[L.foreheadCenter].y);
+  const compressionRatio = verticalSpan; // small => squished
   const chinCompression = clamp01(norm(1.6 - compressionRatio, 0, 0.7));
 
-  /* head angle — combine roll (eye-line tilt) and yaw proxy (nose offset) */
-  const dyEyes = lm[L.rightEyeOut].y - lm[L.leftEyeOut].y;
-  const dxEyes = lm[L.rightEyeOut].x - lm[L.leftEyeOut].x || 1e-6;
-  const roll = Math.abs(Math.atan2(dyEyes, dxEyes)); // radians
-  const noseOffset = Math.abs(lm[L.noseTip].x - cx) / eyeSpan;
-  const headAngle = clamp01(0.6 * norm(roll, 0.05, 0.7) + 0.4 * norm(noseOffset, 0.04, 0.35));
+  /* head angle — original (pre-normalization) roll + yaw proxy */
+  const headAngle = clamp01(
+    0.6 * norm(Math.abs(nf.roll), 0.05, 0.7) +
+    0.4 * norm(Math.abs(nf.yawProxy), 0.04, 0.35),
+  );
 
   return { asymmetry, mouthDistortion, eyeChaos, chinCompression, headAngle };
 }
@@ -252,18 +290,20 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  asymmetry: 0.9,
+  // Static face-shape signals get less weight (too easy to exploit by
+  // sitting still with an asymmetric face). Performance signals get more.
+  asymmetry: 0.45,
   mouthDistortion: 1.4,
   eyeChaos: 1.1,
-  chinCompression: 0.8,
-  headAngle: 0.9,
-  expressionVolatility: 1.2,
-  motionInstability: 1.0,
+  chinCompression: 0.9,
+  headAngle: 0.7,
+  expressionVolatility: 1.7,
+  motionInstability: 1.4,
   audioEnergy: 1.1,
   audioPitch: 0.6,
   audioEntropy: 0.4,
-  audioSpike: 0.5,
-  commitment: 1.3,
+  audioSpike: 0.6,
+  commitment: 1.9,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -296,8 +336,13 @@ export function scoreFromFeatures(
   const exaggerated = Math.pow(norm01, 0.78);
   const target = exaggerated * 10;
 
-  // Smooth toward target so the number doesn't twitch.
-  const score = lerp(prevScore, target, 0.25);
+  // Asymmetric smoothing + spike clamp: react fast on sustained increases,
+  // fall slowly so brief noise spikes don't whiplash the score.
+  const delta = target - prevScore;
+  const maxJump = 1.2;            // hard cap per-frame jump (out of 10)
+  const clamped = Math.max(-maxJump, Math.min(maxJump, delta));
+  const alpha = clamped > 0 ? 0.22 : 0.12;
+  const score = prevScore + clamped * alpha;
 
   return { spatial: s, temporal: t, audio: a, score };
 }
