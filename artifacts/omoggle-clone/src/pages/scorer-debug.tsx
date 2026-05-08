@@ -117,6 +117,9 @@ export default function ScorerDebug() {
   const rafRef = useRef<number>(0);
   const lastVideoTimeRef = useRef(-1);
   const prevScoreRef = useRef(0);
+  const skinRoughnessRef = useRef(0);
+  const lastSkinRunRef = useRef(0);
+  const skinBusyRef = useRef(false);
 
   const [modelReady, setModelReady] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
