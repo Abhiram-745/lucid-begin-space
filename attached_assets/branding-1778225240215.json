@@ -1,0 +1,136 @@
+{
+  "colorScheme": "dark",
+  "fonts": [
+    {
+      "family": "Fira Code",
+      "role": "monospace"
+    },
+    {
+      "family": "JetBrains Mono",
+      "role": "monospace"
+    },
+    {
+      "family": "Courier New",
+      "role": "monospace"
+    }
+  ],
+  "colors": {
+    "primary": "#1D1129",
+    "secondary": "#D8B4FE",
+    "accent": "#000000",
+    "background": "#050505",
+    "textPrimary": "#FFFFFF",
+    "link": "#111329"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Fira Code",
+      "heading": "Fira Code"
+    },
+    "fontStacks": {
+      "heading": [
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif",
+        "Apple Color Emoji",
+        "Segoe UI Emoji",
+        "Segoe UI Symbol",
+        "Noto Color Emoji"
+      ],
+      "body": [
+        "GeistMono",
+        "Fira Code",
+        "JetBrains Mono",
+        "Courier New",
+        "monospace"
+      ],
+      "paragraph": [
+        "GeistMono",
+        "Fira Code",
+        "JetBrains Mono",
+        "Courier New",
+        "monospace"
+      ]
+    },
+    "fontSizes": {
+      "h1": "128px",
+      "h2": "30px",
+      "body": "12px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": "12px"
+  },
+  "components": {
+    "buttonPrimary": {
+      "background": "#000000",
+      "textColor": "#FFFFFF",
+      "borderColor": "#373737",
+      "borderRadius": "32px",
+      "borderRadiusCorners": {
+        "topLeft": "32px",
+        "topRight": "32px",
+        "bottomRight": "32px",
+        "bottomLeft": "32px"
+      },
+      "shadow": "rgba(0, 0, 0, 0.5) 0px 8px 32px 0px"
+    },
+    "buttonSecondary": {
+      "background": "#111329",
+      "textColor": "#FFFFFF",
+      "borderColor": "#2A3070",
+      "borderRadius": "16px",
+      "borderRadiusCorners": {
+        "topLeft": "16px",
+        "topRight": "16px",
+        "bottomRight": "16px",
+        "bottomLeft": "16px"
+      },
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": null,
+    "favicon": "File saved at: attached_assets/favicon.svg",
+    "ogImage": "File saved at: attached_assets/ogImage.png"
+  },
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": 1,
+      "text": "⚔️Enter the ArenaStart Camera Check →By entering the arena you agree to our Terms of Service and Pri",
+      "reasoning": "Button #1 has a vibrant and action-oriented text 'Enter the Arena' which suggests a primary call-to-action. It also has a unique design with a larger border radius and a prominent position, indicating its importance."
+    },
+    "secondary": {
+      "index": 0,
+      "text": "Join DiscordChat, events & updates.›",
+      "reasoning": "Button #0 is a secondary action with a less vibrant background color and text that suggests joining a community, which is typically a secondary action compared to entering a main feature like the arena."
+    },
+    "confidence": 0.95
+  },
+  "personality": {
+    "tone": "playful",
+    "energy": "high",
+    "targetAudience": "young adults interested in gaming and social interaction"
+  },
+  "designSystem": {
+    "framework": "tailwind",
+    "componentLibrary": ""
+  },
+  "confidence": {
+    "buttons": 0.95,
+    "colors": 0.9,
+    "overall": 0.925
+  },
+  "__llm_metadata": {
+    "logoSelection": {
+      "llmCalled": false,
+      "llmSucceeded": false,
+      "finalSource": "none"
+    },
+    "buttonClassification": {
+      "llmCalled": true,
+      "llmSucceeded": true
+    }
+  }
+}

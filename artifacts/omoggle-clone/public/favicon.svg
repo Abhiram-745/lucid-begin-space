@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <path id="left-half" d="M28 12C20.268 12 14 18.268 14 26V38C14 45.732 20.268 52 28 52C29.105 52 30 51.105 30 50V39.8C30 38.92 29.421 38.144 28.578 37.897L28.175 37.779C26.975 37.427 26.419 36.009 27.078 34.94L29.549 30.935C29.849 30.448 30 29.888 30 29.316V14C30 12.895 29.105 12 28 12Z"/>
+    <mask id="left-mask">
+      <rect width="64" height="64" fill="black"/>
+      
+      <circle cx="23" cy="29.5" r="2.7" fill="black"/>
+    </mask>
+    <mask id="right-mask">
+      <rect width="64" height="64" fill="black"/>
+      
+      <circle cx="41" cy="29.5" r="2.7" fill="black"/>
+    </mask>
+  </defs>
+  <path d="M10 18V11C10 8.791 11.791 7 14 7H22.5" stroke="#A7B0BC" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 18V11C54 8.791 52.209 7 50 7H41.5" stroke="#F6F8FB" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 46V53C10 55.209 11.791 57 14 57H22.5" stroke="#A7B0BC" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M54 46V53C54 55.209 52.209 57 50 57H41.5" stroke="#F6F8FB" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="64" height="64" fill="#A7B0BC" mask="url(#left-mask)"/>
+  <rect width="64" height="64" fill="#F6F8FB" mask="url(#right-mask)"/>
+</svg>
