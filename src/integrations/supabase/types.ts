@@ -14,16 +14,261 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      frame_scores: {
+        Row: {
+          created_at: string
+          id: number
+          player_id: string
+          round_id: string
+          score: number
+          t_ms: number
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          player_id: string
+          round_id: string
+          score: number
+          t_ms: number
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          player_id?: string
+          round_id?: string
+          score?: number
+          t_ms?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "frame_scores_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      highlights: {
+        Row: {
+          clip_url: string | null
+          created_at: string
+          id: string
+          player_id: string
+          round_id: string
+          t_ms: number
+          type: string
+        }
+        Insert: {
+          clip_url?: string | null
+          created_at?: string
+          id?: string
+          player_id: string
+          round_id: string
+          t_ms: number
+          type: string
+        }
+        Update: {
+          clip_url?: string | null
+          created_at?: string
+          id?: string
+          player_id?: string
+          round_id?: string
+          t_ms?: number
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlights_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matches: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          mode: string
+          player_a: string
+          player_b: string
+          started_at: string
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          mode?: string
+          player_a: string
+          player_b: string
+          started_at?: string
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          mode?: string
+          player_a?: string
+          player_b?: string
+          started_at?: string
+          winner_id?: string | null
+        }
+        Relationships: []
+      }
+      matchmaking_queue: {
+        Row: {
+          id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      player_stats: {
+        Row: {
+          elo: number
+          losses: number
+          matches_played: number
+          peak_score: number
+          updated_at: string
+          user_id: string
+          wins: number
+        }
+        Insert: {
+          elo?: number
+          losses?: number
+          matches_played?: number
+          peak_score?: number
+          updated_at?: string
+          user_id: string
+          wins?: number
+        }
+        Update: {
+          elo?: number
+          losses?: number
+          matches_played?: number
+          peak_score?: number
+          updated_at?: string
+          user_id?: string
+          wins?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rounds: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          final_scores: Json | null
+          id: string
+          match_id: string
+          round_number: number
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          final_scores?: Json | null
+          id?: string
+          match_id: string
+          round_number: number
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          final_scores?: Json | null
+          id?: string
+          match_id?: string
+          round_number?: number
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rounds_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +395,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
