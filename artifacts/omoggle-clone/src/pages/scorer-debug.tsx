@@ -225,22 +225,118 @@ export default function ScorerDebug() {
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
 
-          // Overlay. The wrapping container mirrors BOTH video and canvas,
-          // so we draw landmarks in raw (un-mirrored) source coordinates.
-          for (const idx of KEY_LANDMARKS) {
+          // ---- Biometric scan overlay ---------------------------------
+          // The wrapping container mirrors video + canvas together, so we
+          // draw in raw (un-mirrored) source coordinates.
+          const t = Math.min(1, result2.score / 10);
+          const time = performance.now() / 1000;
+
+          // 1. Face bounding box (for scan line + framing brackets)
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (const p of lm) {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+          }
+          const bx = minX * w, by = minY * h;
+          const bw = (maxX - minX) * w, bh = (maxY - minY) * h;
+          const padX = bw * 0.12, padY = bh * 0.10;
+
+          // 2. Corner brackets
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = chaosColor(t, 0.85);
+          ctx.shadowColor = chaosColor(t, 0.9);
+          ctx.shadowBlur = 10 + t * 18;
+          const bracket = Math.min(bw, bh) * 0.18;
+          const bx0 = bx - padX, by0 = by - padY;
+          const bx1 = bx + bw + padX, by1 = by + bh + padY;
+          const corners: Array<[number, number, number, number]> = [
+            [bx0, by0, +1, +1], [bx1, by0, -1, +1],
+            [bx0, by1, +1, -1], [bx1, by1, -1, -1],
+          ];
+          for (const [cx0, cy0, sx, sy] of corners) {
+            ctx.beginPath();
+            ctx.moveTo(cx0, cy0 + sy * bracket);
+            ctx.lineTo(cx0, cy0);
+            ctx.lineTo(cx0 + sx * bracket, cy0);
+            ctx.stroke();
+          }
+
+          // 3. Smooth glowing contours along facial regions
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          for (const path of CONTOURS) {
+            const pts = path.map((i) => ({ x: lm[i].x * w, y: lm[i].y * h }));
+            // Outer glow pass
+            ctx.lineWidth = 4 + t * 3;
+            ctx.strokeStyle = chaosColor(t, 0.18);
+            ctx.shadowBlur = 14 + t * 22;
+            strokeSmooth(ctx, pts);
+            // Crisp inner stroke
+            ctx.lineWidth = 1.1;
+            ctx.strokeStyle = chaosColor(t, 0.95);
+            ctx.shadowBlur = 6;
+            strokeSmooth(ctx, pts);
+          }
+
+          // 4. Simplified mesh — connect key region anchors
+          const meshLinks: Array<[number, number]> = [
+            [33, 133], [362, 263],          // eyes
+            [133, 1], [362, 1],             // eye->nose
+            [1, 61], [1, 291],              // nose->mouth corners
+            [61, 291],                      // mouth line
+            [61, 152], [291, 152],          // mouth->chin
+            [234, 152], [454, 152],         // jaw->chin
+            [234, 33], [454, 263],          // jaw->eye
+          ];
+          ctx.lineWidth = 0.6;
+          ctx.strokeStyle = chaosColor(t, 0.35);
+          ctx.shadowBlur = 4;
+          for (const [a, b] of meshLinks) {
+            ctx.beginPath();
+            ctx.moveTo(lm[a].x * w, lm[a].y * h);
+            ctx.lineTo(lm[b].x * w, lm[b].y * h);
+            ctx.stroke();
+          }
+
+          // 5. Pulsing landmark nodes
+          const pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
+          for (const idx of NODE_LANDMARKS) {
             const p = lm[idx];
             if (!p) continue;
-            const x = p.x * w;
-            const y = p.y * h;
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(168,85,247,0.35)";
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(x, y, 2.4, 0, Math.PI * 2);
-            ctx.fillStyle = "#22e96b";
-            ctx.fill();
+            const x = p.x * w, y = p.y * h;
+            const r = 2.2 + pulse * 1.4 + t * 1.6;
+            ctx.shadowBlur = 12 + t * 16;
+            ctx.shadowColor = chaosColor(t, 0.9);
+            ctx.fillStyle = chaosColor(t, 0.25);
+            ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = chaosColor(t, 1);
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
           }
+
+          // 6. Horizontal scan line sweeping across face bbox
+          const sweep = (Math.sin(time * 1.3) * 0.5 + 0.5);
+          const scanY = by0 + sweep * (by1 - by0);
+          const grad = ctx.createLinearGradient(bx0, scanY, bx1, scanY);
+          grad.addColorStop(0, chaosColor(t, 0));
+          grad.addColorStop(0.5, chaosColor(t, 0.9));
+          grad.addColorStop(1, chaosColor(t, 0));
+          ctx.shadowBlur = 18 + t * 22;
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(bx0, scanY);
+          ctx.lineTo(bx1, scanY);
+          ctx.stroke();
+
+          // 7. High-chaos glitch tear
+          if (t > 0.7 && Math.random() < 0.25) {
+            const ty = by0 + Math.random() * (by1 - by0);
+            ctx.fillStyle = chaosColor(t, 0.18);
+            ctx.shadowBlur = 0;
+            ctx.fillRect(bx0, ty, bx1 - bx0, 2);
+          }
+
+          ctx.shadowBlur = 0;
         }
       } catch {
         // skip frame
