@@ -83,7 +83,7 @@ export default function LiveArena() {
   useEffect(() => {
     if (mp.opponentLeft && !winner && mp.status === "live") {
       setWinner("you");
-      setEvents((p) => [...p, { type: "no_face", t: performance.now() }].slice(-5));
+      setEvents((p) => [...p, { type: "no_face" as const, t: performance.now() }].slice(-5));
     }
   }, [mp.opponentLeft, winner, mp.status]);
 
