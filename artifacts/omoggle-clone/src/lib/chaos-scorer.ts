@@ -262,8 +262,8 @@ export function extractStructure(lm: Pt[]): StructureFeatures {
   // Image coordinates are y-down, so an upturned outer corner has lower y
   // -> negative tilt. Flip sign so "upturned" reads as positive.
   const upturned = -avgTilt;
-  const ideal = 0.12; // ~7°, the looksmaxx "positive cantal tilt" target
-  const cantalDeviation = clamp01(norm(Math.abs(upturned - ideal), 0.03, 0.30));
+  const cantalIdeal = 0.12; // ~7°, the looksmaxx "positive cantal tilt" target
+  const cantalDeviation = clamp01(norm(Math.abs(upturned - cantalIdeal), 0.03, 0.30));
 
   // Inversion: reward deviation from ideal — but keep magnitude modest.
   const inversion = clamp01(
