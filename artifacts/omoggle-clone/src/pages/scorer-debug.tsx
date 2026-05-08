@@ -233,7 +233,20 @@ export default function ScorerDebug() {
       try {
         const result = landmarker.detectForVideo(video, performance.now());
         const lm = result.faceLandmarks?.[0];
-        if (lm) {
+        // ---- Hard face-presence gating ---------------------------------
+        // Need a full landmark set AND a face that occupies enough of the
+        // frame to be reliable. Tiny / partial faces are dropped.
+        let bboxArea = 0;
+        if (lm && lm.length >= 400) {
+          let xMin = 1, yMin = 1, xMax = 0, yMax = 0;
+          for (const p of lm) {
+            if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
+            if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
+          }
+          bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
+        }
+        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.04; // ~20% wide
+        if (faceConfident && lm) {
           noFaceFramesRef.current = 0;
           if (!hasFace) setHasFace(true);
           const spatial = extractSpatial(lm);
@@ -252,6 +265,13 @@ export default function ScorerDebug() {
             );
           }
 
+          // Confidence proxy: bbox size (bigger = closer = more reliable)
+          // tempered by motion stability (very shaky landmarks => less
+          // trustworthy frame).
+          const sizeConf = Math.min(1, bboxArea / 0.18);
+          const motionPenalty = Math.min(0.4, temporal.motionInstability * 0.6);
+          const confidence = Math.max(0.25, sizeConf - motionPenalty);
+
           const result2 = scoreFromFeatures(
             spatial,
             temporal,
@@ -261,6 +281,7 @@ export default function ScorerDebug() {
             emotion,
             structure,
             skinRoughnessRef.current,
+            confidence,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
