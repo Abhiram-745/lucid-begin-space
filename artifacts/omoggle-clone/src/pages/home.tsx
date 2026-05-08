@@ -3,7 +3,6 @@ import { NotificationBanner } from "@/components/notification-banner";
 import { GuestBanner } from "@/components/guest-banner";
 import { AgeGateModal } from "@/components/age-gate-modal";
 import { Swords, Trophy, ChevronRight } from "lucide-react";
-import { SiDiscord } from "react-icons/si";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 
@@ -35,7 +34,7 @@ export default function Home() {
                 transition={{ repeat: Infinity, duration: 2 }}
                 className="w-2 h-2 rounded-full bg-accent mr-2 shadow-[0_0_8px_rgba(216,180,254,0.8)]" 
               />
-              Live 1v1 Mog Arena
+              Live 1v1 Unmog Arena
             </div>
             <div className="text-xs text-muted-foreground uppercase font-bold">
               {onlineCount.toLocaleString()} Online
@@ -43,7 +42,7 @@ export default function Home() {
           </div>
 
           <h1 className="text-6xl sm:text-8xl md:text-9xl font-black tracking-tighter text-white drop-shadow-2xl">
-            OMOGGLE
+            UNMOGGLE
           </h1>
         </div>
 
@@ -71,8 +70,8 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full mb-12">
           {[
             { num: "1", title: "Camera Check", desc: "Verify video & audio" },
-            { num: "2", title: "Solo PSL Scan", desc: "Face symmetry analysis" },
-            { num: "3", title: "Compete & Climb", desc: "Mog opponents, rank up" }
+            { num: "2", title: "Solo Scan", desc: "Face symmetry analysis" },
+            { num: "3", title: "Compete & Climb", desc: "Unmog opponents, rank up" }
           ].map((step) => (
             <div key={step.num} className="bg-card/50 border border-border rounded-2xl p-6 text-center">
               <div className="text-accent font-black text-2xl mb-2">{step.num}</div>
@@ -82,22 +81,14 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full mb-16">
-          <Link href="/leaderboard" className="bg-card hover:bg-card/80 border border-border rounded-2xl p-6 flex items-center justify-between transition-colors group cursor-pointer">
+        <div className="w-full mb-16">
+          <Link href="/leaderboard" className="bg-card hover:bg-card/80 border border-border rounded-2xl p-6 flex items-center justify-between transition-colors group cursor-pointer w-full">
             <div className="flex items-center gap-4">
               <Trophy className="w-6 h-6 text-yellow-500" />
               <span className="font-bold uppercase tracking-wider">View Leaderboard</span>
             </div>
             <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-white transition-colors" />
           </Link>
-          
-          <a href="#" className="bg-card hover:bg-card/80 border border-border rounded-2xl p-6 flex items-center justify-between transition-colors group">
-            <div className="flex items-center gap-4">
-              <SiDiscord className="w-6 h-6 text-[#5865F2]" />
-              <span className="font-bold uppercase tracking-wider">Join Discord</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-white transition-colors" />
-          </a>
         </div>
 
         <div className="text-[10px] text-muted-foreground/50 uppercase tracking-widest text-center">

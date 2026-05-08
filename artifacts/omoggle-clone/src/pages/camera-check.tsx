@@ -53,7 +53,7 @@ export default function CameraCheck() {
               </div>
               <h2 className="text-2xl font-black uppercase tracking-tight mb-4 text-white">Camera Access</h2>
               <p className="text-sm text-muted-foreground uppercase tracking-widest leading-relaxed mb-8">
-                Omoggle requires camera access to place you in the arena. Your video is live 1v1.
+                Unmoggle requires camera access to place you in the arena. Your video is live 1v1.
               </p>
               
               <div className="w-full aspect-video bg-black rounded-xl border border-border flex items-center justify-center mb-8 overflow-hidden relative">

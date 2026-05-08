@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Leaderboard from "@/pages/leaderboard";
 import CameraCheck from "@/pages/camera-check";
 import Arena from "@/pages/arena";
+import Profile from "@/pages/profile";
 import { useEffect } from "react";
 
 const queryClient = new QueryClient();
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/leaderboard" component={Leaderboard} />
       <Route path="/camera-check" component={CameraCheck} />
       <Route path="/arena" component={Arena} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

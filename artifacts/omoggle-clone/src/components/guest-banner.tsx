@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 
 export function GuestBanner() {
   const [isClaimed, setIsClaimed] = useState(false);
@@ -8,7 +9,7 @@ export function GuestBanner() {
     <div className="bg-card border-b border-border py-2 px-4 flex justify-center items-center text-sm gap-4">
       {isClaimed ? (
         <span className="text-muted-foreground uppercase">
-          Playing as <span className="text-white font-bold">{username}</span>
+          Playing as <Link href="/profile" className="text-white font-bold hover:underline cursor-pointer">{username}</Link>
         </span>
       ) : (
         <>
