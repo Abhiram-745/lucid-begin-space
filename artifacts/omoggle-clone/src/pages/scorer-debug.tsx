@@ -105,8 +105,8 @@ export default function ScorerDebug() {
         analyser.smoothingTimeConstant = 0.4;
         src.connect(analyser);
         analyserRef.current = analyser;
-        timeBufRef.current = new Float32Array(analyser.fftSize);
-        freqBufRef.current = new Uint8Array(analyser.frequencyBinCount);
+        timeBufRef.current = new Float32Array(new ArrayBuffer(analyser.fftSize * 4));
+        freqBufRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
         setMicReady(true);
       })
       .catch(() => setError("Camera or microphone access denied."));
