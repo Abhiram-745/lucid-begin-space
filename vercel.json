@@ -3,6 +3,6 @@
   "framework": null,
   "installCommand": "corepack pnpm install --frozen-lockfile --ignore-scripts",
   "buildCommand": "BASE_PATH=/ PORT=3000 corepack pnpm --filter @workspace/omoggle-clone run build",
-  "outputDirectory": "artifacts/omoggle-clone/dist/public",
+  "outputDirectory": "artifacts/omoggle-clone/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
