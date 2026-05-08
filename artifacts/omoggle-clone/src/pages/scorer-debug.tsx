@@ -11,7 +11,7 @@ import {
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
-import { analyzeSkin } from "@/lib/skin-analyzer";
+import { analyzeSkin, analyzeTeeth } from "@/lib/skin-analyzer";
 
 /** Connection sets shipped with @mediapipe/tasks-vision — typed loosely so
  *  we don't depend on the internal Connection shape. */
@@ -127,8 +127,11 @@ export default function ScorerDebug() {
   const lastVideoTimeRef = useRef(-1);
   const prevScoreRef = useRef(0);
   const skinRoughnessRef = useRef(0);
+  const teethSignalRef = useRef(0);
   const lastSkinRunRef = useRef(0);
+  const lastTeethRunRef = useRef(0);
   const skinBusyRef = useRef(false);
+  const teethBusyRef = useRef(false);
 
   const [modelReady, setModelReady] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -137,6 +140,7 @@ export default function ScorerDebug() {
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
   const [hasFace, setHasFace] = useState(false);
   const [skinRoughness, setSkinRoughness] = useState(0);
+  const [teethSignal, setTeethSignal] = useState(0);
   const hasFaceRef = useRef(false);
   const noFaceFramesRef = useRef(0);
   const lastDebugLogRef = useRef(0);
