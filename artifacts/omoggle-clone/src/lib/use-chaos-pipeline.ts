@@ -4,6 +4,8 @@ import {
   AudioTracker,
   TemporalTracker,
   extractSpatial,
+  extractEmotion,
+  extractStructure,
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "./chaos-scorer";
@@ -111,6 +113,8 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
         if (lm && lm.length > 400) {
           setHasFace(true);
           const spatial = extractSpatial(lm as any);
+          const emotion = extractEmotion(lm as any);
+          const structure = extractStructure(lm as any);
           const temp = temporal.current.update(spatial, lm as any);
 
           // audio
@@ -125,7 +129,7 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
             );
           }
 
-          const b = scoreFromFeatures(spatial, temp, audio, undefined, prevScore.current);
+          const b = scoreFromFeatures(spatial, temp, audio, undefined, prevScore.current, emotion, structure);
           prevScore.current = b.score;
           setBreakdown(b);
           setOppMouthProxy(spatial.mouthDistortion);

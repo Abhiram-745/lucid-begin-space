@@ -6,6 +6,8 @@ import {
   AudioTracker,
   TemporalTracker,
   extractSpatial,
+  extractEmotion,
+  extractStructure,
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
@@ -202,6 +204,8 @@ export default function ScorerDebug() {
         const lm = result.faceLandmarks?.[0];
         if (lm) {
           const spatial = extractSpatial(lm);
+          const emotion = extractEmotion(lm);
+          const structure = extractStructure(lm);
           const temporal = temporalRef.current.update(spatial, lm);
 
           let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
@@ -221,6 +225,8 @@ export default function ScorerDebug() {
             audio,
             undefined,
             prevScoreRef.current,
+            emotion,
+            structure,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
@@ -414,6 +420,35 @@ export default function ScorerDebug() {
               </div>
             </div>
 
+            {/* Scan readouts */}
+            {breakdown && (
+              <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
+                <ReadoutRow
+                  label="Chaos Energy"
+                  value={breakdown.readouts.chaosEnergy}
+                  tone={breakdown.chaosEnergy}
+                />
+                <ReadoutRow
+                  label="Emotional Signal"
+                  value={breakdown.readouts.emotion}
+                  tone={breakdown.emotion.intensity}
+                />
+                <ReadoutRow
+                  label="Performance"
+                  value={breakdown.readouts.performance}
+                  tone={Math.min(1, score / 10)}
+                />
+                <ReadoutRow
+                  label="Facial Deviation"
+                  value={`${breakdown.readouts.deviation}%`}
+                  tone={breakdown.structure.inversion}
+                />
+                <div className="pt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/30">
+                  Simulated · entertainment only
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
                 <div>
@@ -476,10 +511,55 @@ export default function ScorerDebug() {
                   <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} />
                 </div>
               </div>
+
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-300 mb-2">
+                  Perceived emotion · simulated
+                </div>
+                <div className="space-y-2.5">
+                  <Bar label="Surprise" value={breakdown?.emotion.surprise ?? 0} />
+                  <Bar label="Anger tension" value={breakdown?.emotion.anger ?? 0} />
+                  <Bar label="Confusion" value={breakdown?.emotion.confusion ?? 0} />
+                  <Bar label="Exaggeration" value={breakdown?.emotion.exaggeration ?? 0} />
+                  <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-300 mb-2">
+                  Structural inversion · low weight
+                </div>
+                <div className="space-y-2.5">
+                  <Bar label="Aesthetic deviation" value={breakdown ? 1 - breakdown.structure.symmetryIdeal : 0} />
+                  <Bar label="Ratio mismatch" value={breakdown?.structure.ratioDeviation ?? 0} />
+                  <Bar label="Cantal tilt deviation" value={breakdown?.structure.cantalDeviation ?? 0} />
+                </div>
+              </div>
             </div>
           </aside>
         </section>
       </main>
+    </div>
+  );
+}
+
+function ReadoutRow({ label, value, tone }: { label: string; value: string; tone: number }) {
+  const t = Math.max(0, Math.min(1, tone));
+  const hue = t < 0.5 ? 190 + (285 - 190) * (t / 0.5) : 285 + (335 - 285) * ((t - 0.5) / 0.5);
+  return (
+    <div className="flex items-center justify-between gap-3 text-[10px] font-black uppercase tracking-[0.18em]">
+      <span className="text-white/45">{label}</span>
+      <span
+        className="rounded-md border px-2 py-0.5 tabular-nums"
+        style={{
+          color: `hsl(${hue}, 90%, 70%)`,
+          borderColor: `hsla(${hue}, 90%, 60%, 0.5)`,
+          backgroundColor: `hsla(${hue}, 90%, 50%, 0.10)`,
+          textShadow: `0 0 8px hsla(${hue}, 90%, 60%, 0.55)`,
+        }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
