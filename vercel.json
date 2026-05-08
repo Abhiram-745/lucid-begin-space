@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "corepack pnpm install --frozen-lockfile",
+  "installCommand": "npm_config_user_agent=pnpm/10 corepack pnpm install --frozen-lockfile",
   "buildCommand": "BASE_PATH=/ PORT=3000 corepack pnpm --filter @workspace/omoggle-clone run build",
   "outputDirectory": "artifacts/omoggle-clone/dist/public"
 }
