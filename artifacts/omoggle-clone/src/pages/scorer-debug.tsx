@@ -302,6 +302,7 @@ export default function ScorerDebug() {
             emotion,
             structure,
             skinRoughnessRef.current,
+            teethSignalRef.current,
             confidence,
           );
           prevScoreRef.current = result2.score;
@@ -424,6 +425,26 @@ export default function ScorerDebug() {
               .catch(() => {})
               .finally(() => { skinBusyRef.current = false; });
           }
+
+          if (!teethBusyRef.current && now - lastTeethRunRef.current > 180) {
+            lastTeethRunRef.current = now;
+            teethBusyRef.current = true;
+            const ml = lm[61];
+            const mr = lm[291];
+            const mt = lm[13];
+            const mb = lm[14];
+            const mx = Math.min(ml.x, mr.x) * w;
+            const my = Math.min(mt.y, mb.y) * h;
+            const mw = Math.abs(mr.x - ml.x) * w;
+            const mh = Math.max(10, Math.abs(mb.y - mt.y) * h * 1.8);
+            analyzeTeeth(video, mx, my - mh * 0.25, mw, mh)
+              .then((r) => {
+                teethSignalRef.current = teethSignalRef.current * 0.65 + r.signal * 0.35;
+                setTeethSignal(teethSignalRef.current);
+              })
+              .catch(() => {})
+              .finally(() => { teethBusyRef.current = false; });
+          }
         }
         else {
           noFaceFramesRef.current += 1;
@@ -436,7 +457,9 @@ export default function ScorerDebug() {
             setHasFace(false);
             setBreakdown(null);
             setSkinRoughness(0);
+            setTeethSignal(0);
             skinRoughnessRef.current = 0;
+            teethSignalRef.current = 0;
             temporalRef.current.reset();
             audioTrackerRef.current.reset();
           }
