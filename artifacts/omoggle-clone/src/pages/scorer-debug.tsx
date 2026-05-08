@@ -553,11 +553,11 @@ export default function ScorerDebug() {
                   Spatial · facial geometry
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} />
-                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
-                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} />
-                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} />
-                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} />
+                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} na={!hasFace} />
+                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} na={!hasFace} />
+                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} na={!hasFace} />
+                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} na={!hasFace} />
+                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -566,9 +566,9 @@ export default function ScorerDebug() {
                   Temporal · motion over time
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} />
-                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} />
-                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} />
+                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} na={!hasFace} />
+                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} na={!hasFace} />
+                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -577,10 +577,10 @@ export default function ScorerDebug() {
                   Audio · vocal disruption
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} />
-                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} />
-                  <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} />
-                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} />
+                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} na={!hasFace} />
+                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} na={!hasFace} />
+                  <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} na={!hasFace} />
+                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} na={!hasFace} />
                 </div>
               </div>
 
@@ -589,12 +589,12 @@ export default function ScorerDebug() {
                   Perceived emotion · simulated
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Surprise" value={breakdown?.emotion?.surprise ?? 0} />
-                  <Bar label="Anger tension" value={breakdown?.emotion?.anger ?? 0} />
-                  <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} />
-                  <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} />
-                  <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
-                  <Bar label="Skin texture (TF.js)" value={skinRoughness} />
+                  <Bar label="Surprise" value={breakdown?.emotion?.surprise ?? 0} na={!hasFace} />
+                  <Bar label="Anger tension" value={breakdown?.emotion?.anger ?? 0} na={!hasFace} />
+                  <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} na={!hasFace} />
+                  <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} na={!hasFace} />
+                  <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} na={!hasFace} />
+                  <Bar label="Skin texture (TF.js)" value={skinRoughness} na={!hasFace} />
                 </div>
               </div>
 
@@ -603,9 +603,9 @@ export default function ScorerDebug() {
                   Structural inversion · low weight
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Aesthetic deviation" value={breakdown?.structure ? 1 - breakdown.structure.symmetryIdeal : 0} />
-                  <Bar label="Ratio mismatch" value={breakdown?.structure?.ratioDeviation ?? 0} />
-                  <Bar label="Cantal tilt deviation" value={breakdown?.structure?.cantalDeviation ?? 0} />
+                  <Bar label="Aesthetic deviation" value={breakdown?.structure ? 1 - breakdown.structure.symmetryIdeal : 0} na={!hasFace} />
+                  <Bar label="Ratio mismatch" value={breakdown?.structure?.ratioDeviation ?? 0} na={!hasFace} />
+                  <Bar label="Cantal tilt deviation" value={breakdown?.structure?.cantalDeviation ?? 0} na={!hasFace} />
                 </div>
               </div>
             </div>
