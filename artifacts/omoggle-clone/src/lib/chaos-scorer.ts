@@ -425,19 +425,21 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // Reward ACTION over face structure. Performance signals dominate.
-  asymmetry: 0.25,
-  mouthDistortion: 1.8,
-  eyeChaos: 1.4,
-  chinCompression: 0.7,
-  headAngle: 0.6,
-  expressionVolatility: 2.2,
-  motionInstability: 1.9,
-  audioEnergy: 1.6,
-  audioPitch: 0.9,
-  audioEntropy: 0.5,
-  audioSpike: 1.0,
-  commitment: 2.4,
+  // Balance: structural "chopped"-ness drives the baseline (asymmetry,
+  // chin compression, ratio deviation) — performance is reactive boost.
+  // Sitting still + symmetric => LOW score. Distorted/asymmetric => HIGH.
+  asymmetry: 1.6,
+  mouthDistortion: 1.4,
+  eyeChaos: 1.0,
+  chinCompression: 1.6,
+  headAngle: 0.4,
+  expressionVolatility: 1.4,
+  motionInstability: 1.2,
+  audioEnergy: 0.9,
+  audioPitch: 0.5,
+  audioEntropy: 0.3,
+  audioSpike: 0.7,
+  commitment: 1.0,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -469,36 +471,36 @@ export function scoreFromFeatures(
 
   // Step 1: aggressive non-linear rescale — pulls mid-range up sharply.
   const norm01 = clamp01(raw / weightSum);
-  let curved = Math.pow(norm01, 0.55);
+  let curved = Math.pow(norm01, 0.7);
 
   // Step 2: top-end amplification — high performance feels explosive.
-  if (curved > 0.6) curved *= 1.25;
-  if (curved > 0.78) curved *= 1.18;
+  if (curved > 0.7) curved *= 1.15;
 
   // Step 3: momentum + peak boosts — escalation and burst frames pop.
-  curved += 0.18 * t.momentum;
-  curved += 0.12 * t.peak;
+  curved += 0.10 * t.momentum;
+  curved += 0.08 * t.peak;
 
-  // Step 4: commitment bonus — sustained intensity gets a flat reward.
-  if (t.commitment > 0.55) curved += 0.08 + 0.12 * (t.commitment - 0.55);
+  // Step 4: (no commitment auto-bonus — was inflating idle scores)
 
   // Step 5: perceived-emotion bump — performance, not structure.
-  curved += 0.14 * e.intensity;
+  curved += 0.08 * e.intensity;
 
-  // Step 6: structural INVERSION — small weight (~10%). Aesthetic ideal
-  // gets a tiny penalty; deviation gets a tiny boost.
-  curved += 0.10 * (st.inversion - 0.5);
+  // Step 6: structural INVERSION — large weight. A "chopped" / asymmetric
+  // / off-ratio face raises the score; an aesthetic-ideal face suppresses
+  // it. NOTE: landmark geometry only — we cannot detect skin (acne) here.
+  curved += 0.35 * st.inversion;
+  curved -= 0.20 * st.symmetryIdeal;
 
   const target = clamp01(curved) * 10;
 
-  // Smoothing — fast rise, slow fall, but allow peaks to punch through.
+  // Smoothing — symmetric so a clean face DROPS the score quickly.
   const delta = target - prevScore;
-  const maxJumpUp = 2.2;   // bigger room for hype spikes
-  const maxJumpDn = 0.9;   // gentler decay
+  const maxJumpUp = 1.8;
+  const maxJumpDn = 1.6;
   const clamped = delta > 0
     ? Math.min(maxJumpUp, delta)
     : Math.max(-maxJumpDn, delta);
-  const alpha = clamped > 0 ? 0.42 : 0.14;
+  const alpha = clamped > 0 ? 0.35 : 0.30;
   let score = prevScore + clamped * alpha;
   if (score < 0) score = 0;
   if (score > 10) score = 10;
