@@ -295,7 +295,7 @@ export default function ScorerDebug() {
           const t = Math.min(1, result2.score / 10);
           const time = performance.now() / 1000;
 
-          // 1. Face bounding box (for scan line + framing brackets)
+          // 1. Face bounding box (used by skin sampler + node placement)
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
           for (const p of lm) {
             if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
@@ -303,27 +303,6 @@ export default function ScorerDebug() {
           }
           const bx = minX * w, by = minY * h;
           const bw = (maxX - minX) * w, bh = (maxY - minY) * h;
-          const padX = bw * 0.12, padY = bh * 0.10;
-
-          // 2. Corner brackets
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = chaosColor(t, 0.85);
-          ctx.shadowColor = chaosColor(t, 0.9);
-          ctx.shadowBlur = 10 + t * 18;
-          const bracket = Math.min(bw, bh) * 0.18;
-          const bx0 = bx - padX, by0 = by - padY;
-          const bx1 = bx + bw + padX, by1 = by + bh + padY;
-          const corners: Array<[number, number, number, number]> = [
-            [bx0, by0, +1, +1], [bx1, by0, -1, +1],
-            [bx0, by1, +1, -1], [bx1, by1, -1, -1],
-          ];
-          for (const [cx0, cy0, sx, sy] of corners) {
-            ctx.beginPath();
-            ctx.moveTo(cx0, cy0 + sy * bracket);
-            ctx.lineTo(cx0, cy0);
-            ctx.lineTo(cx0 + sx * bracket, cy0);
-            ctx.stroke();
-          }
 
           // 3. FULL TRIANGULATED FACE MESH (FACEMESH_TESSELATION)
           //    Drawn first, low opacity, glow scales with score.
@@ -389,29 +368,6 @@ export default function ScorerDebug() {
             ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = chaosColor(t, 1);
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-          }
-
-          // 6. Horizontal scan line sweeping across face bbox
-          const sweep = (Math.sin(time * 1.3) * 0.5 + 0.5);
-          const scanY = by0 + sweep * (by1 - by0);
-          const grad = ctx.createLinearGradient(bx0, scanY, bx1, scanY);
-          grad.addColorStop(0, chaosColor(t, 0));
-          grad.addColorStop(0.5, chaosColor(t, 0.9));
-          grad.addColorStop(1, chaosColor(t, 0));
-          ctx.shadowBlur = 18 + t * 22;
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.moveTo(bx0, scanY);
-          ctx.lineTo(bx1, scanY);
-          ctx.stroke();
-
-          // 7. High-chaos glitch tear
-          if (t > 0.7 && Math.random() < 0.25) {
-            const ty = by0 + Math.random() * (by1 - by0);
-            ctx.fillStyle = chaosColor(t, 0.18);
-            ctx.shadowBlur = 0;
-            ctx.fillRect(bx0, ty, bx1 - bx0, 2);
           }
 
           ctx.shadowBlur = 0;
