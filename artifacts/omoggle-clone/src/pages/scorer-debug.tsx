@@ -517,10 +517,10 @@ export default function ScorerDebug() {
                   Perceived emotion · simulated
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Surprise" value={breakdown?.emotion.surprise ?? 0} />
-                  <Bar label="Anger tension" value={breakdown?.emotion.anger ?? 0} />
-                  <Bar label="Confusion" value={breakdown?.emotion.confusion ?? 0} />
-                  <Bar label="Exaggeration" value={breakdown?.emotion.exaggeration ?? 0} />
+                  <Bar label="Surprise" value={breakdown?.emotion?.surprise ?? 0} />
+                  <Bar label="Anger tension" value={breakdown?.emotion?.anger ?? 0} />
+                  <Bar label="Confusion" value={breakdown?.emotion?.confusion ?? 0} />
+                  <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} />
                   <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} />
                 </div>
               </div>
@@ -530,9 +530,9 @@ export default function ScorerDebug() {
                   Structural inversion · low weight
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Aesthetic deviation" value={breakdown ? 1 - breakdown.structure.symmetryIdeal : 0} />
-                  <Bar label="Ratio mismatch" value={breakdown?.structure.ratioDeviation ?? 0} />
-                  <Bar label="Cantal tilt deviation" value={breakdown?.structure.cantalDeviation ?? 0} />
+                  <Bar label="Aesthetic deviation" value={breakdown?.structure ? 1 - breakdown.structure.symmetryIdeal : 0} />
+                  <Bar label="Ratio mismatch" value={breakdown?.structure?.ratioDeviation ?? 0} />
+                  <Bar label="Cantal tilt deviation" value={breakdown?.structure?.cantalDeviation ?? 0} />
                 </div>
               </div>
             </div>
