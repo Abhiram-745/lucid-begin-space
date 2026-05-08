@@ -670,6 +670,7 @@ export default function ScorerDebug() {
                   <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} na={!hasFace} />
                   <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} na={!hasFace} />
                   <Bar label="Skin texture (TF.js)" value={skinRoughness} na={!hasFace} />
+                  <Bar label="Teeth texture (TF.js)" value={teethSignal} na={!hasFace} />
                 </div>
               </div>
 
