@@ -493,34 +493,33 @@ export default function ScorerDebug() {
               </div>
             )}
 
-            {/* Scan readouts */}
-            {hasFace && breakdown && breakdown.readouts && breakdown.emotion && breakdown.structure && (
-              <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
-                <ReadoutRow
-                  label="Chaos Energy"
-                  value={breakdown.readouts.chaosEnergy}
-                  tone={breakdown.chaosEnergy ?? 0}
-                />
-                <ReadoutRow
-                  label="Emotional Signal"
-                  value={breakdown.readouts.emotion}
-                  tone={breakdown.emotion.intensity ?? 0}
-                />
-                <ReadoutRow
-                  label="Performance"
-                  value={breakdown.readouts.performance}
-                  tone={Math.min(1, score / 10)}
-                />
-                <ReadoutRow
-                  label="Facial Deviation"
-                  value={`${breakdown.readouts.deviation}%`}
-                  tone={breakdown.structure.inversion ?? 0}
-                />
-                <div className="pt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/30">
-                  Simulated · entertainment only
-                </div>
+            {/* Scan readouts — always rendered; values fall back to N/A
+                when no face is present so the panel doesn't pop in/out. */}
+            <div className="absolute right-6 top-6 w-[260px] space-y-1.5 rounded-[20px] border border-white/15 bg-black/60 p-4 backdrop-blur-md">
+              <ReadoutRow
+                label="Chaos Energy"
+                value={hasFace && breakdown ? breakdown.readouts.chaosEnergy : "N/A"}
+                tone={hasFace && breakdown ? breakdown.chaosEnergy : 0}
+              />
+              <ReadoutRow
+                label="Emotional Signal"
+                value={hasFace && breakdown ? breakdown.readouts.emotion : "N/A"}
+                tone={hasFace && breakdown ? breakdown.emotion.intensity : 0}
+              />
+              <ReadoutRow
+                label="Performance"
+                value={hasFace && breakdown ? breakdown.readouts.performance : "N/A"}
+                tone={hasFace ? Math.min(1, score / 10) : 0}
+              />
+              <ReadoutRow
+                label="Facial Deviation"
+                value={hasFace && breakdown ? `${breakdown.readouts.deviation}%` : "N/A"}
+                tone={hasFace && breakdown ? breakdown.structure.inversion : 0}
+              />
+              <div className="pt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/30">
+                Simulated · entertainment only
               </div>
-            )}
+            </div>
 
             {error && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/70 px-6 text-center">
