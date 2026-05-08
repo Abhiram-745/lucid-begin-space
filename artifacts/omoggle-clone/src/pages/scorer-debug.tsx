@@ -85,17 +85,17 @@ function strokeSmooth(ctx: CanvasRenderingContext2D, pts: { x: number; y: number
   ctx.stroke();
 }
 
-function Bar({ label, value }: { label: string; value: number }) {
-  const pct = Math.round(value * 100);
+function Bar({ label, value, na = false }: { label: string; value: number; na?: boolean }) {
+  const pct = na ? 0 : Math.round(value * 100);
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-[10px] font-black uppercase tracking-[0.2em]">
         <span className="text-white/55">{label}</span>
-        <span className="text-white tabular-nums">{pct}</span>
+        <span className={`tabular-nums ${na ? "text-white/30" : "text-white"}`}>{na ? "N/A" : pct}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,#22d3ee,#a855f7,#f43f5e)] transition-[width] duration-100"
+          className={`h-full rounded-full transition-[width] duration-100 ${na ? "bg-white/15" : "bg-[linear-gradient(90deg,#22d3ee,#a855f7,#f43f5e)]"}`}
           style={{ width: `${pct}%` }}
         />
       </div>
