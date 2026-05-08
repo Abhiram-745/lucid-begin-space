@@ -425,24 +425,35 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // Balance: structural "chopped"-ness drives the baseline (asymmetry,
-  // chin compression, ratio deviation) — performance is reactive boost.
-  // Sitting still + symmetric => LOW score. Distorted/asymmetric => HIGH.
-  asymmetry: 1.6,
-  mouthDistortion: 1.4,
-  eyeChaos: 1.0,
-  chinCompression: 1.6,
-  headAngle: 0.4,
-  expressionVolatility: 1.4,
-  motionInstability: 1.2,
-  audioEnergy: 0.9,
-  audioPitch: 0.5,
-  audioEntropy: 0.3,
-  audioSpike: 0.7,
-  commitment: 1.0,
+  // Performance ≈ 75 %, structural inversion ≈ 25 %.
+  // Sitting still + symmetric => LOW. Sustained chaotic distortion => HIGH.
+  asymmetry: 0.40,
+  mouthDistortion: 1.20,
+  eyeChaos: 0.90,
+  chinCompression: 0.40,
+  headAngle: 0.25,
+  expressionVolatility: 1.40,
+  motionInstability: 1.10,
+  audioEnergy: 0.70,
+  audioPitch: 0.35,
+  audioEntropy: 0.20,
+  audioSpike: 0.55,
+  commitment: 0.95,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
+
+/** Drop tiny noise so micro-jitters don't move the score. */
+function deadzone(v: number, threshold = 0.06): number {
+  if (!Number.isFinite(v) || v <= threshold) return 0;
+  return (v - threshold) / (1 - threshold);
+}
+
+/** Smooth, bounded sigmoid mapping a weighted sum into 0..1.
+ *  k controls steepness; mid is the inflection point. */
+function sigmoid01(x: number, k = 6, mid = 0.45): number {
+  return 1 / (1 + Math.exp(-k * (x - mid)));
+}
 
 export function scoreFromFeatures(
   s: SpatialFeatures,
@@ -453,61 +464,81 @@ export function scoreFromFeatures(
   e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
   skinRoughness = 0,
+  /** 0..1 — multiplied into the final score. Low = no face / unstable. */
+  confidence = 1,
 ): ChaosBreakdown {
-  const weightSum = Object.values(w).reduce((sum, v) => sum + v, 0);
+  // ---- 1. Dead-zoned, normalized features --------------------------------
+  // Every feature is already 0..1 from extraction. Apply a small dead zone
+  // so micro-jitter (lighting flicker, sub-pixel landmark noise) yields 0.
+  const f = {
+    asymmetry:           deadzone(s.asymmetry),
+    mouthDistortion:     deadzone(s.mouthDistortion, 0.10),
+    eyeChaos:            deadzone(s.eyeChaos, 0.08),
+    chinCompression:     deadzone(s.chinCompression),
+    headAngle:           deadzone(s.headAngle, 0.10),
+    expressionVolatility:deadzone(t.expressionVolatility, 0.05),
+    motionInstability:   deadzone(t.motionInstability, 0.05),
+    audioEnergy:         deadzone(a.energy, 0.08),
+    audioPitch:          deadzone(a.pitchVariation, 0.08),
+    audioEntropy:        deadzone(a.spectralEntropy, 0.05),
+    audioSpike:          deadzone(a.spike, 0.10),
+    commitment:          deadzone(t.commitment, 0.10),
+  };
 
-  const raw =
-    w.asymmetry * s.asymmetry +
-    w.mouthDistortion * s.mouthDistortion +
-    w.eyeChaos * s.eyeChaos +
-    w.chinCompression * s.chinCompression +
-    w.headAngle * s.headAngle +
-    w.expressionVolatility * t.expressionVolatility +
-    w.motionInstability * t.motionInstability +
-    w.audioEnergy * a.energy +
-    w.audioPitch * a.pitchVariation +
-    w.audioEntropy * a.spectralEntropy +
-    w.audioSpike * a.spike +
-    w.commitment * t.commitment;
+  // ---- 2. Performance bucket (~75 %) -------------------------------------
+  const perfWeights =
+    w.mouthDistortion + w.eyeChaos + w.expressionVolatility +
+    w.motionInstability + w.audioEnergy + w.audioPitch +
+    w.audioEntropy + w.audioSpike + w.commitment;
+  const performance =
+    (w.mouthDistortion       * f.mouthDistortion +
+     w.eyeChaos              * f.eyeChaos +
+     w.expressionVolatility  * f.expressionVolatility +
+     w.motionInstability     * f.motionInstability +
+     w.audioEnergy           * f.audioEnergy +
+     w.audioPitch            * f.audioPitch +
+     w.audioEntropy          * f.audioEntropy +
+     w.audioSpike            * f.audioSpike +
+     w.commitment            * f.commitment) / Math.max(perfWeights, 1e-6);
 
-  // Step 1: aggressive non-linear rescale — pulls mid-range up sharply.
-  const norm01 = clamp01(raw / weightSum);
-  let curved = Math.pow(norm01, 0.7);
+  // ---- 3. Structural bucket (~25 %) — looksmaxx geometry, REVERSED -------
+  const structWeights = w.asymmetry + w.chinCompression + w.headAngle;
+  const structuralRaw =
+    (w.asymmetry       * f.asymmetry +
+     w.chinCompression * f.chinCompression +
+     w.headAngle       * f.headAngle) / Math.max(structWeights, 1e-6);
+  // Blend with explicit inversion (golden-ratio + cantal-tilt deviation)
+  // and subtract symmetry ideal — clean faces get suppressed.
+  const structural = clamp01(
+    0.55 * structuralRaw +
+    0.45 * st.inversion -
+    0.25 * st.symmetryIdeal,
+  );
 
-  // Step 2: top-end amplification — high performance feels explosive.
-  if (curved > 0.7) curved *= 1.15;
+  // ---- 4. Combine + sigmoid soft-map -------------------------------------
+  const combined =
+    0.75 * performance +
+    0.25 * structural +
+    0.05 * e.intensity +     // small flavor bump
+    0.10 * skinRoughness;    // TF.js texture (entertainment only)
 
-  // Step 3: momentum + peak boosts — escalation and burst frames pop.
-  curved += 0.10 * t.momentum;
-  curved += 0.08 * t.peak;
+  // Sigmoid keeps the curve bounded and removes the aggressive multipliers.
+  let target01 = sigmoid01(combined, 6, 0.42);
 
-  // Step 4: (no commitment auto-bonus — was inflating idle scores)
+  // ---- 5. Confidence weighting -------------------------------------------
+  const conf = clamp01(confidence);
+  target01 = target01 * conf;
 
-  // Step 5: perceived-emotion bump — performance, not structure.
-  curved += 0.08 * e.intensity;
+  const targetScore = target01 * 10;
 
-  // Step 6: structural INVERSION — large weight. A "chopped" / asymmetric
-  // / off-ratio face raises the score; an aesthetic-ideal face suppresses
-  // it. NOTE: landmark geometry only — we cannot detect skin (acne) here.
-  curved += 0.35 * st.inversion;
-  curved -= 0.20 * st.symmetryIdeal;
-
-  // Step 7: TF.js skin-roughness signal — high-frequency texture energy
-  // from the cheek/forehead crop. Bumpy / textured skin pushes the score
-  // up. Entertainment heuristic only.
-  curved += 0.25 * skinRoughness;
-
-  const target = clamp01(curved) * 10;
-
-  // Smoothing — symmetric so a clean face DROPS the score quickly.
-  const delta = target - prevScore;
-  const maxJumpUp = 1.8;
-  const maxJumpDn = 1.6;
-  const clamped = delta > 0
-    ? Math.min(maxJumpUp, delta)
-    : Math.max(-maxJumpDn, delta);
-  const alpha = clamped > 0 ? 0.35 : 0.30;
-  let score = prevScore + clamped * alpha;
+  // ---- 6. Temporal stability — EMA + clamped delta -----------------------
+  // alpha controls smoothing (0.20–0.30 sweet spot).
+  // Hard cap on per-frame change keeps the readout believable.
+  const alpha = 0.22;
+  const delta = targetScore - prevScore;
+  const maxJump = 0.8; // ~0.8 / frame at 30 FPS = full-range swing in ~0.5 s
+  const clampedDelta = Math.max(-maxJump, Math.min(maxJump, delta));
+  let score = prevScore + alpha * clampedDelta;
   if (score < 0) score = 0;
   if (score > 10) score = 10;
 
