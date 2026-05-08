@@ -340,9 +340,11 @@ export class TemporalTracker {
     this.history.push(spatial);
     if (this.history.length > WINDOW) this.history.shift();
 
-    /* volatility: mean stddev across the 5 spatial channels */
-    const channels: (keyof SpatialFeatures)[] = [
-      "asymmetry", "mouthDistortion", "eyeChaos", "chinCompression", "headAngle",
+    /* volatility: mean stddev across the live numeric spatial channels */
+    const channels: Array<keyof Pick<SpatialFeatures,
+      "asymmetry" | "mouthDistortion" | "teethExposure" | "eyeChaos" | "chinCompression" | "headAngle"
+    >> = [
+      "asymmetry", "mouthDistortion", "teethExposure", "eyeChaos", "chinCompression", "headAngle",
     ];
     let totalStd = 0;
     for (const k of channels) {
@@ -371,11 +373,12 @@ export class TemporalTracker {
 
     /* commitment: rolling average of an instant chaos proxy staying high */
     const instantChaos =
-      0.25 * spatial.mouthDistortion +
-      0.2  * spatial.eyeChaos +
-      0.2  * spatial.asymmetry +
+      0.23 * spatial.mouthDistortion +
+      0.10 * spatial.teethExposure +
+      0.18 * spatial.eyeChaos +
+      0.19 * spatial.asymmetry +
       0.15 * spatial.chinCompression +
-      0.2  * spatial.headAngle;
+      0.15 * spatial.headAngle;
     this.chaosHistory.push(instantChaos);
     if (this.chaosHistory.length > WINDOW) this.chaosHistory.shift();
     const sustained =
