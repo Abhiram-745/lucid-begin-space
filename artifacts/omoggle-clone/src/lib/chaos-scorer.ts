@@ -83,9 +83,17 @@ export function normalizeLandmarks(lm: Pt[]): NormalizedFace {
 export interface SpatialFeatures {
   asymmetry: number;        // L/R differences
   mouthDistortion: number;  // openness + stretch
+  teethExposure: number;    // visible teeth / mouth interior proxy
   eyeChaos: number;         // mismatch + extreme open/close
   chinCompression: number;  // double-chin / jut
   headAngle: number;        // tilt + rotation magnitude
+  raw: {
+    asymmetryPct: number;
+    mouthOpenRatio: number;
+    teethExposure: number;
+    chinCompression: number;
+    headTiltDeg: number;
+  };
 }
 
 export function extractSpatial(lm: Pt[]): SpatialFeatures {
@@ -95,31 +103,38 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   const p = nf.points;
   const eyeSpan = 1; // by definition after normalization
 
-  /* asymmetry — compare left vs right paired distances from face midline (x=0) */
+  /* asymmetry — compare mirrored L/R landmark pairs in canonical face space */
   const pairs: Array<[number, number]> = [
     [L.leftEyeOut, L.rightEyeOut],
+    [L.leftEyeIn, L.rightEyeIn],
     [L.cheekLeft, L.cheekRight],
     [L.mouthLeft, L.mouthRight],
     [L.jawLeft, L.jawRight],
     [L.browLeftOut, L.browRightOut],
+    [L.browLeftIn, L.browRightIn],
   ];
   let asymSum = 0;
   for (const [a, b] of pairs) {
-    const dxA = Math.abs(p[a].x);
-    const dxB = Math.abs(p[b].x);
-    const dyDiff = Math.abs(p[a].y - p[b].y);
-    asymSum += Math.abs(dxA - dxB) + dyDiff;
+    const mirroredB = { x: -p[b].x, y: p[b].y };
+    asymSum += dist(p[a], mirroredB);
   }
-  const asymmetry = norm(asymSum, 0.05, 0.6);
+  const asymRaw = asymSum / pairs.length;
+  const asymmetry = norm(asymRaw, 0.015, 0.20);
 
   /* mouth distortion — vertical opening + horizontal stretch beyond resting */
   const mouthOpen = dist(p[L.mouthTop], p[L.mouthBot]);
   const mouthWide = dist(p[L.mouthLeft], p[L.mouthRight]);
   const lipStretch = dist(p[L.upperLipTop], p[L.lowerLipBot]);
+  const mouthOpenRatio = mouthOpen / Math.max(mouthWide, 1e-6);
+  const teethExposure = clamp01(
+    0.75 * norm(mouthOpenRatio, 0.035, 0.22) +
+    0.25 * norm(lipStretch / Math.max(mouthWide, 1e-6), 0.10, 0.34),
+  );
   const mouthDistortion = clamp01(
-    0.55 * norm(mouthOpen, 0.05, 0.55) +
+    0.45 * norm(mouthOpenRatio, 0.04, 0.34) +
     0.25 * norm(mouthWide, 0.55, 1.05) +
-    0.20 * norm(lipStretch, 0.10, 0.65),
+    0.15 * norm(lipStretch, 0.10, 0.65) +
+    0.15 * teethExposure,
   );
 
   /* eye chaos — wide-open / squint mismatch between eyes */
@@ -132,18 +147,41 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   );
   const eyeChaos = clamp01(0.6 * norm(eyeMismatch, 0.005, 0.06) + 0.4 * eyeExtreme);
 
-  /* chin compression — chin pulled toward chest (small forehead->chin Y span vs eye span) */
+  /* chin compression — lower-face/jaw squeezed toward mouth (double-chin proxy).
+   * Uses jaw/chin geometry instead of the whole forehead→chin span, so it
+   * changes when the chin is tucked, mouth is grimaced, or jawline collapses. */
   const verticalSpan = Math.abs(p[L.chin].y - p[L.foreheadCenter].y);
-  const compressionRatio = verticalSpan; // small => squished
-  const chinCompression = clamp01(norm(1.6 - compressionRatio, 0, 0.7));
+  const jawMid = avgPt(p[L.jawLeft], p[L.jawRight]);
+  const lowerFaceSpan = Math.abs(p[L.chin].y - p[L.mouthBot].y);
+  const jawToChinSpan = Math.abs(p[L.chin].y - jawMid.y);
+  const faceSquash = clamp01(norm(1.92 - verticalSpan, 0, 0.55));
+  const chinCompression = clamp01(
+    0.45 * norm(0.62 - lowerFaceSpan, 0, 0.34) +
+    0.35 * norm(0.50 - jawToChinSpan, 0, 0.28) +
+    0.20 * faceSquash,
+  );
 
   /* head angle — original (pre-normalization) roll + yaw proxy */
   const headAngle = clamp01(
-    0.6 * norm(Math.abs(nf.roll), 0.05, 0.7) +
-    0.4 * norm(Math.abs(nf.yawProxy), 0.04, 0.35),
+    0.72 * norm(Math.abs(nf.roll), 0.015, 0.50) +
+    0.28 * norm(Math.abs(nf.yawProxy), 0.025, 0.28),
   );
 
-  return { asymmetry, mouthDistortion, eyeChaos, chinCompression, headAngle };
+  return {
+    asymmetry,
+    mouthDistortion,
+    teethExposure,
+    eyeChaos,
+    chinCompression,
+    headAngle,
+    raw: {
+      asymmetryPct: clamp01(asymRaw / 0.20),
+      mouthOpenRatio,
+      teethExposure,
+      chinCompression,
+      headTiltDeg: Math.abs(nf.roll) * 180 / Math.PI,
+    },
+  };
 }
 
 /* ---------- perceived emotion (NOT scientific — performance cues only) ---------- */
