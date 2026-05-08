@@ -437,10 +437,11 @@ export default function ScorerDebug() {
         }
         else {
           noFaceFramesRef.current += 1;
-          // Tolerate brief drops (~10 frames) before hiding the score box.
-          if (noFaceFramesRef.current > 10 && hasFace) {
+          // Gradual decay (×0.9 / frame) instead of an instant drop, then
+          // hide the score box after a short tolerance window.
+          prevScoreRef.current = prevScoreRef.current * 0.9;
+          if (noFaceFramesRef.current > 12 && hasFace) {
             setHasFace(false);
-            prevScoreRef.current = 0;
           }
         }
       } catch {
