@@ -11,7 +11,7 @@ import {
   scoreFromFeatures,
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
-import { analyzeSkin } from "@/lib/skin-analyzer";
+import { analyzeSkin, analyzeTeeth } from "@/lib/skin-analyzer";
 
 /** Connection sets shipped with @mediapipe/tasks-vision — typed loosely so
  *  we don't depend on the internal Connection shape. */
@@ -103,6 +103,15 @@ function Bar({ label, value, na = false }: { label: string; value: number; na?: 
   );
 }
 
+function RawMetric({ label, value, na = false }: { label: string; value: string; na?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 py-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
+      <span className="text-white/40">{label}</span>
+      <span className={`tabular-nums ${na ? "text-white/25" : "text-cyan-100"}`}>{na ? "N/A" : value}</span>
+    </div>
+  );
+}
+
 export default function ScorerDebug() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -118,8 +127,11 @@ export default function ScorerDebug() {
   const lastVideoTimeRef = useRef(-1);
   const prevScoreRef = useRef(0);
   const skinRoughnessRef = useRef(0);
+  const teethSignalRef = useRef(0);
   const lastSkinRunRef = useRef(0);
+  const lastTeethRunRef = useRef(0);
   const skinBusyRef = useRef(false);
+  const teethBusyRef = useRef(false);
 
   const [modelReady, setModelReady] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -128,7 +140,10 @@ export default function ScorerDebug() {
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
   const [hasFace, setHasFace] = useState(false);
   const [skinRoughness, setSkinRoughness] = useState(0);
+  const [teethSignal, setTeethSignal] = useState(0);
+  const hasFaceRef = useRef(false);
   const noFaceFramesRef = useRef(0);
+  const lastDebugLogRef = useRef(0);
 
   /* Load MediaPipe */
   useEffect(() => {
@@ -245,13 +260,16 @@ export default function ScorerDebug() {
           }
           bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
         }
-        // Lower bar: MediaPipe returns 478 landmarks when it sees a face,
-        // so any landmarks at all means we have one. Bbox ≥ ~12% width is
-        // enough to score reliably; smaller faces just dampen confidence.
-        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.015;
+        // MediaPipe returns 478 landmarks when it sees a face. Keep the gate
+        // permissive so normal webcam distance doesn't get marked NO FACE;
+        // small/partial faces are handled by confidence damping below.
+        const faceConfident = !!lm && lm.length >= 400 && bboxArea > 0.006;
         if (faceConfident && lm) {
           noFaceFramesRef.current = 0;
-          if (!hasFace) setHasFace(true);
+          if (!hasFaceRef.current) {
+            hasFaceRef.current = true;
+            setHasFace(true);
+          }
           const spatial = extractSpatial(lm);
           const emotion = extractEmotion(lm);
           const structure = extractStructure(lm);
@@ -271,9 +289,9 @@ export default function ScorerDebug() {
           // Confidence proxy: bbox size (bigger = closer = more reliable)
           // tempered by motion stability. Floor at 0.5 so a normal-distance
           // face never gets its score crushed.
-          const sizeConf = Math.min(1, bboxArea / 0.10);
-          const motionPenalty = Math.min(0.3, temporal.motionInstability * 0.4);
-          const confidence = Math.max(0.5, sizeConf - motionPenalty);
+          const sizeConf = Math.min(1, bboxArea / 0.07);
+          const motionPenalty = Math.min(0.22, temporal.motionInstability * 0.28);
+          const confidence = Math.max(0.65, sizeConf - motionPenalty);
 
           const result2 = scoreFromFeatures(
             spatial,
@@ -284,10 +302,24 @@ export default function ScorerDebug() {
             emotion,
             structure,
             skinRoughnessRef.current,
+            teethSignalRef.current,
             confidence,
           );
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
+
+          const nowForDebug = performance.now();
+          if (nowForDebug - lastDebugLogRef.current > 1000) {
+            lastDebugLogRef.current = nowForDebug;
+            console.table({
+              asymmetry_pct: Math.round(spatial.raw.asymmetryPct * 100),
+              chin_compression: spatial.raw.chinCompression.toFixed(3),
+              head_tilt_deg: spatial.raw.headTiltDeg.toFixed(1),
+              mouth_open_ratio: spatial.raw.mouthOpenRatio.toFixed(3),
+              teeth_exposure: spatial.raw.teethExposure.toFixed(3),
+              score: result2.score.toFixed(2),
+            });
+          }
 
           // ---- Biometric scan overlay ---------------------------------
           // The wrapping container mirrors video + canvas together, so we
@@ -393,14 +425,43 @@ export default function ScorerDebug() {
               .catch(() => {})
               .finally(() => { skinBusyRef.current = false; });
           }
+
+          if (!teethBusyRef.current && now - lastTeethRunRef.current > 180) {
+            lastTeethRunRef.current = now;
+            teethBusyRef.current = true;
+            const ml = lm[61];
+            const mr = lm[291];
+            const mt = lm[13];
+            const mb = lm[14];
+            const mx = Math.min(ml.x, mr.x) * w;
+            const my = Math.min(mt.y, mb.y) * h;
+            const mw = Math.abs(mr.x - ml.x) * w;
+            const mh = Math.max(10, Math.abs(mb.y - mt.y) * h * 1.8);
+            analyzeTeeth(video, mx, my - mh * 0.25, mw, mh)
+              .then((r) => {
+                teethSignalRef.current = teethSignalRef.current * 0.65 + r.signal * 0.35;
+                setTeethSignal(teethSignalRef.current);
+              })
+              .catch(() => {})
+              .finally(() => { teethBusyRef.current = false; });
+          }
         }
         else {
           noFaceFramesRef.current += 1;
-          // Gradual decay (×0.9 / frame) instead of an instant drop, then
-          // hide the score box after a short tolerance window.
+          // Hide all readouts quickly when MediaPipe loses the face. Keep a
+          // tiny 2-frame grace period only to avoid one-frame detector flicker.
           prevScoreRef.current = prevScoreRef.current * 0.9;
-          if (noFaceFramesRef.current > 12 && hasFace) {
+          if (noFaceFramesRef.current > 2 && hasFaceRef.current) {
+            hasFaceRef.current = false;
+            prevScoreRef.current = 0;
             setHasFace(false);
+            setBreakdown(null);
+            setSkinRoughness(0);
+            setTeethSignal(0);
+            skinRoughnessRef.current = 0;
+            teethSignalRef.current = 0;
+            temporalRef.current.reset();
+            audioTrackerRef.current.reset();
           }
         }
       } catch {
@@ -555,9 +616,23 @@ export default function ScorerDebug() {
                 <div className="space-y-2.5">
                   <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} na={!hasFace} />
                   <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} na={!hasFace} />
+                  <Bar label="Teeth exposure" value={breakdown?.spatial.teethExposure ?? 0} na={!hasFace} />
                   <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} na={!hasFace} />
                   <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} na={!hasFace} />
                   <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} na={!hasFace} />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
+                  Raw debug · per-frame inputs
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-1">
+                  <RawMetric label="Asymmetry %" value={`${Math.round((breakdown?.spatial.raw.asymmetryPct ?? 0) * 100)}%`} na={!hasFace} />
+                  <RawMetric label="Chin compression" value={(breakdown?.spatial.raw.chinCompression ?? 0).toFixed(3)} na={!hasFace} />
+                  <RawMetric label="Head tilt angle" value={`${(breakdown?.spatial.raw.headTiltDeg ?? 0).toFixed(1)}°`} na={!hasFace} />
+                  <RawMetric label="Mouth distortion" value={(breakdown?.spatial.raw.mouthOpenRatio ?? 0).toFixed(3)} na={!hasFace} />
+                  <RawMetric label="Teeth signal" value={(breakdown?.spatial.raw.teethExposure ?? 0).toFixed(3)} na={!hasFace} />
                 </div>
               </div>
 
@@ -595,6 +670,7 @@ export default function ScorerDebug() {
                   <Bar label="Exaggeration" value={breakdown?.emotion?.exaggeration ?? 0} na={!hasFace} />
                   <Bar label="Cortical overload (sim.)" value={breakdown?.chaosEnergy ?? 0} na={!hasFace} />
                   <Bar label="Skin texture (TF.js)" value={skinRoughness} na={!hasFace} />
+                  <Bar label="Teeth texture (TF.js)" value={teethSignal} na={!hasFace} />
                 </div>
               </div>
 
