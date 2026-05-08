@@ -497,6 +497,7 @@ export const DEFAULT_WEIGHTS = {
   // Sitting still + symmetric => LOW. Sustained chaotic distortion => HIGH.
   asymmetry: 0.40,
   mouthDistortion: 1.20,
+  teethExposure: 0.55,
   eyeChaos: 0.90,
   chinCompression: 0.40,
   headAngle: 0.25,
