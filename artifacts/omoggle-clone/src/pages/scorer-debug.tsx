@@ -300,42 +300,56 @@ export default function ScorerDebug() {
             ctx.stroke();
           }
 
-          // 3. Smooth glowing contours along facial regions
+          // 3. FULL TRIANGULATED FACE MESH (FACEMESH_TESSELATION)
+          //    Drawn first, low opacity, glow scales with score.
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
-          for (const path of CONTOURS) {
-            const pts = path.map((i) => ({ x: lm[i].x * w, y: lm[i].y * h }));
-            // Outer glow pass
-            ctx.lineWidth = 4 + t * 3;
-            ctx.strokeStyle = chaosColor(t, 0.18);
-            ctx.shadowBlur = 14 + t * 22;
-            strokeSmooth(ctx, pts);
-            // Crisp inner stroke
-            ctx.lineWidth = 1.1;
-            ctx.strokeStyle = chaosColor(t, 0.95);
-            ctx.shadowBlur = 6;
-            strokeSmooth(ctx, pts);
+          ctx.lineWidth = 0.5;
+          ctx.shadowBlur = 4 + t * 8;
+          ctx.shadowColor = chaosColor(t, 0.6);
+          ctx.strokeStyle = chaosColor(t, 0.10 + t * 0.18);
+          ctx.beginPath();
+          for (let i = 0; i < TESSELATION.length; i++) {
+            const c = TESSELATION[i];
+            const a = lm[c.start]; const b = lm[c.end];
+            if (!a || !b) continue;
+            ctx.moveTo(a.x * w, a.y * h);
+            ctx.lineTo(b.x * w, b.y * h);
           }
+          ctx.stroke();
 
-          // 4. Simplified mesh — connect key region anchors
-          const meshLinks: Array<[number, number]> = [
-            [33, 133], [362, 263],          // eyes
-            [133, 1], [362, 1],             // eye->nose
-            [1, 61], [1, 291],              // nose->mouth corners
-            [61, 291],                      // mouth line
-            [61, 152], [291, 152],          // mouth->chin
-            [234, 152], [454, 152],         // jaw->chin
-            [234, 33], [454, 263],          // jaw->eye
-          ];
-          ctx.lineWidth = 0.6;
-          ctx.strokeStyle = chaosColor(t, 0.35);
-          ctx.shadowBlur = 4;
-          for (const [a, b] of meshLinks) {
+          // 4. CONTOUR LINES — jawline, brows, eyes, lips. Two passes:
+          //    fat soft outer glow + thin crisp inner stroke. Glow scales
+          //    aggressively with chaos score.
+          const drawContour = (
+            conns: Array<{ start: number; end: number }>,
+            width: number,
+          ) => {
+            // Outer glow
+            ctx.lineWidth = width + 3 + t * 4;
+            ctx.strokeStyle = chaosColor(t, 0.22 + t * 0.22);
+            ctx.shadowBlur = 14 + t * 26;
+            ctx.shadowColor = chaosColor(t, 0.95);
             ctx.beginPath();
-            ctx.moveTo(lm[a].x * w, lm[a].y * h);
-            ctx.lineTo(lm[b].x * w, lm[b].y * h);
+            for (const c of conns) {
+              const a = lm[c.start]; const b = lm[c.end];
+              if (!a || !b) continue;
+              ctx.moveTo(a.x * w, a.y * h);
+              ctx.lineTo(b.x * w, b.y * h);
+            }
             ctx.stroke();
-          }
+            // Crisp inner stroke
+            ctx.lineWidth = width;
+            ctx.strokeStyle = chaosColor(t, 0.98);
+            ctx.shadowBlur = 6 + t * 8;
+            ctx.stroke();
+          };
+          drawContour(FACE_OVAL, 1.2);
+          drawContour(LEFT_BROW, 1.4);
+          drawContour(RIGHT_BROW, 1.4);
+          drawContour(LEFT_EYE, 1.1);
+          drawContour(RIGHT_EYE, 1.1);
+          drawContour(LIPS, 1.3);
 
           // 5. Pulsing landmark nodes
           const pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
