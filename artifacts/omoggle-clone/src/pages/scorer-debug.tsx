@@ -130,9 +130,15 @@ export default function ScorerDebug() {
       return;
     }
 
-    const rect = video.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
+    // Use the video's NATIVE pixel dimensions so landmark coords (normalized
+    // to the source frame) map 1:1 onto the canvas. CSS then scales the
+    // canvas with the same object-fit as the video, keeping them aligned.
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) {
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -175,10 +181,8 @@ export default function ScorerDebug() {
           prevScoreRef.current = result2.score;
           setBreakdown(result2);
 
-          // overlay
-          ctx.save();
-          ctx.translate(w, 0);
-          ctx.scale(-1, 1);
+          // Overlay. The wrapping container mirrors BOTH video and canvas,
+          // so we draw landmarks in raw (un-mirrored) source coordinates.
           for (const idx of KEY_LANDMARKS) {
             const p = lm[idx];
             if (!p) continue;
@@ -193,7 +197,6 @@ export default function ScorerDebug() {
             ctx.fillStyle = "#22e96b";
             ctx.fill();
           }
-          ctx.restore();
         }
       } catch {
         // skip frame
