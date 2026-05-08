@@ -390,6 +390,27 @@ export default function ScorerDebug() {
           }
 
           ctx.shadowBlur = 0;
+
+          // 8. TF.js skin-roughness sample — runs every ~400ms on the
+          //    cheek/forehead region. Result feeds the next score frame.
+          const now = performance.now();
+          if (!skinBusyRef.current && now - lastSkinRunRef.current > 400) {
+            lastSkinRunRef.current = now;
+            skinBusyRef.current = true;
+            // Sample a tighter inner region (avoid hairline + jaw edges).
+            const sx = bx + bw * 0.18;
+            const sy = by + bh * 0.20;
+            const sw = bw * 0.64;
+            const sh = bh * 0.55;
+            analyzeSkin(video, sx, sy, sw, sh)
+              .then((r) => {
+                // Smooth the roughness signal so it doesn't jitter the score.
+                skinRoughnessRef.current =
+                  skinRoughnessRef.current * 0.7 + r.roughness * 0.3;
+              })
+              .catch(() => {})
+              .finally(() => { skinBusyRef.current = false; });
+          }
         }
         else {
           noFaceFramesRef.current += 1;
