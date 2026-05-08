@@ -10,9 +10,53 @@ import {
   type ChaosBreakdown,
 } from "@/lib/chaos-scorer";
 
-const KEY_LANDMARKS = [
-  10, 33, 133, 362, 263, 1, 61, 291, 152, 234, 454, 13, 14, 159, 145, 386, 374,
+/* Smoothed contour paths through subsets of the FaceMesh vertex set.
+ * Indices chosen to draw clean curves with no internal noise. */
+const CONTOURS: number[][] = [
+  // jawline (left ear -> chin -> right ear)
+  [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454],
+  // left brow
+  [70, 63, 105, 66, 107],
+  // right brow
+  [336, 296, 334, 293, 300],
+  // nose bridge
+  [168, 6, 197, 195, 5, 4, 1],
+  // left eye outline
+  [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7, 33],
+  // right eye outline
+  [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249, 263],
+  // outer mouth
+  [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61],
+  // inner mouth
+  [78, 81, 13, 311, 308, 402, 14, 178, 78],
 ];
+const NODE_LANDMARKS = [33, 133, 362, 263, 1, 61, 291, 13, 14, 152, 10, 234, 454];
+
+/** Cool-blue → purple → red-pink gradient stop at given chaos [0..1] */
+function chaosColor(t: number, alpha = 1) {
+  // 3-stop gradient: cyan(190°) -> purple(285°) -> hot pink(335°)
+  const h = t < 0.5 ? 190 + (285 - 190) * (t / 0.5) : 285 + (335 - 285) * ((t - 0.5) / 0.5);
+  const s = 90;
+  const l = 55 + t * 10;
+  return `hsla(${h.toFixed(1)}, ${s}%, ${l}%, ${alpha})`;
+}
+
+/** Catmull-Rom-ish smooth stroke through a sequence of points. */
+function strokeSmooth(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]) {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const mx = (p0.x + p1.x) / 2;
+    const my = (p0.y + p1.y) / 2;
+    ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
+  }
+  const last = pts[pts.length - 1];
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+}
 
 function Bar({ label, value }: { label: string; value: number }) {
   const pct = Math.round(value * 100);
