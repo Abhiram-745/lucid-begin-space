@@ -1,17 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, Zap, SkipForward, AlertTriangle, Flag } from "lucide-react";
+import { ChevronLeft, X, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 export default function Arena() {
-  const [searching, setSearching] = useState(true);
-  const [opponent, setOpponent] = useState<string | null>(null);
-  const [matchState, setMatchState] = useState<"searching" | "found" | "voting" | "result">("searching");
-  
-  const [myScore, setMyScore] = useState<number | null>(null);
-  const [opponentScore, setOpponentScore] = useState<number | null>(null);
-  const [result, setResult] = useState<"win" | "loss" | null>(null);
+  const [waitTime, setWaitTime] = useState(0);
+  const [searchingText, setSearchingText] = useState("Searching for opponent...");
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -33,169 +28,104 @@ export default function Arena() {
   }, []);
 
   useEffect(() => {
-    if (matchState === "searching") {
-      const timer = setTimeout(() => {
-        setMatchState("found");
-        setOpponent("Gigachad_99");
-        setSearching(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
+    const timer = setInterval(() => {
+      setWaitTime(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
-    if (matchState === "found") {
-      const timer = setTimeout(() => {
-        setMatchState("voting");
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+  useEffect(() => {
+    const texts = ["Searching for opponent...", "Analyzing queue...", "Finding best match...", "Checking latency..."];
+    let i = 0;
+    const textTimer = setInterval(() => {
+      i = (i + 1) % texts.length;
+      setSearchingText(texts[i]);
+    }, 3000);
+    return () => clearInterval(textTimer);
+  }, []);
 
-    if (matchState === "voting") {
-      const timer = setTimeout(() => {
-        const me = Math.floor(Math.random() * 200) + 450;
-        const opp = Math.floor(Math.random() * 250) + 700;
-        setMyScore(me);
-        setOpponentScore(opp);
-        setResult(me < opp ? "win" : "loss");
-        setMatchState("result");
-      }, 5000);
-      
-      const scoreInterval = setInterval(() => {
-        setMyScore(Math.floor(Math.random() * 200) + 450);
-        setOpponentScore(Math.floor(Math.random() * 250) + 700);
-      }, 500);
-      
-      return () => {
-        clearTimeout(timer);
-        clearInterval(scoreInterval);
-      };
-    }
-  }, [matchState]);
-
-  const handleSkip = () => {
-    setOpponent(null);
-    setMatchState("searching");
-    setSearching(true);
-    setMyScore(null);
-    setOpponentScore(null);
-    setResult(null);
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
-
-  const isWinning = myScore !== null && opponentScore !== null && myScore < opponentScore;
 
   return (
     <div className="h-[100dvh] w-full bg-black flex flex-col overflow-hidden font-mono">
       {/* Top Bar */}
-      <header className="h-16 border-b border-border bg-background flex items-center justify-between px-4 sm:px-8 z-10 shrink-0">
-        <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer">
+      <header className="h-16 border-b border-white/10 bg-[#050505] flex items-center justify-between px-4 sm:px-8 z-10 shrink-0">
+        <Link href="/" className="flex items-center gap-2 text-white/50 hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer">
           <ChevronLeft className="w-4 h-4" /> Leave Arena
         </Link>
         
         <div className="flex items-center gap-4">
-          {matchState !== "searching" && (
-            <div className="px-3 py-1 bg-card border border-border rounded-full text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              Round 1 of 3
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            <span className="font-black uppercase tracking-widest text-sm">Live</span>
+            <span className="font-black uppercase tracking-widest text-sm text-white">Live</span>
           </div>
         </div>
 
-        <button className="text-muted-foreground hover:text-destructive transition-colors">
+        <button className="text-white/30 hover:text-red-500 transition-colors">
           <Flag className="w-5 h-5" />
         </button>
       </header>
 
       {/* Video Grid */}
-      <main className="flex-1 flex flex-col md:flex-row gap-2 p-2 bg-black overflow-hidden relative">
+      <main className="flex-1 flex flex-col md:flex-row gap-4 p-4 bg-black overflow-hidden relative">
         
-        {/* Match State Overlays */}
-        <AnimatePresence>
-          {matchState === "found" && (
-            <motion.div 
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.2, opacity: 0 }}
-              className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none"
-            >
-              <div className="bg-primary text-primary-foreground px-8 py-4 rounded-2xl font-black text-4xl uppercase tracking-tighter shadow-[0_0_50px_rgba(216,180,254,0.5)]">
-                Opponent Found
-              </div>
-            </motion.div>
-          )}
+        {/* Opponent View - Searching UI */}
+        <div className="flex-1 bg-[#080810] rounded-2xl relative overflow-hidden flex flex-col border border-white/5 shadow-inner">
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
           
-          {matchState === "result" && (
-            <motion.div 
-              initial={{ scale: 0.8, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 flex flex-col items-center pointer-events-none"
-            >
-              <div className={`px-8 py-4 rounded-2xl font-black text-4xl uppercase tracking-tighter mb-4 shadow-2xl border ${result === 'win' ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
-                {result === 'win' ? 'You Win — Lower Unmog Score!' : 'Opponent Wins'}
-              </div>
-              <div className="bg-card border border-border px-6 py-2 rounded-full font-bold uppercase tracking-widest text-sm shadow-xl flex items-center gap-2">
-                Elo Change: <span className={result === 'win' ? 'text-green-500' : 'text-red-500'}>{result === 'win' ? '+24' : '-18'}</span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Scan line effect */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="w-full h-2 bg-gradient-to-b from-transparent via-purple-500/10 to-transparent animate-scan-line" />
+          </div>
 
-        {/* Opponent Video */}
-        <div className="flex-1 bg-[#0a0a0a] rounded-xl relative overflow-hidden flex flex-col border border-border/20">
-          {searching ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="w-16 h-16 rounded-full border-4 border-border border-t-accent animate-spin mb-4" />
-              <div className="font-mono text-accent uppercase font-bold tracking-widest text-sm animate-pulse">
-                Searching for Opponent...
+          <div className="absolute inset-0 flex flex-col items-center justify-center relative z-10">
+            <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
+              <motion.div
+                className="absolute inset-0 border border-purple-500/30 rounded-full"
+                animate={{ scale: [1, 2], opacity: [1, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+              />
+              <motion.div
+                className="absolute inset-0 border border-purple-500/20 rounded-full"
+                animate={{ scale: [1, 2], opacity: [1, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 1 }}
+              />
+              <div className="w-12 h-12 bg-purple-500/20 rounded-full blur-md absolute" />
+              <div className="w-4 h-4 bg-purple-400 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.8)]" />
+            </div>
+            
+            <motion.div 
+              key={searchingText}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              className="font-mono text-purple-300 uppercase font-bold tracking-[0.2em] text-sm mb-6 h-6"
+            >
+              {searchingText}
+            </motion.div>
+            
+            <div className="flex gap-6 text-xs text-white/50 uppercase tracking-widest bg-black/40 px-6 py-3 rounded-full border border-white/5">
+              <div className="flex flex-col items-center">
+                <span className="mb-1 text-white/30 text-[10px]">Queue</span>
+                <span className="text-white">2,847 in queue</span>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div className="flex flex-col items-center">
+                <span className="mb-1 text-white/30 text-[10px]">Wait Time</span>
+                <span className="text-white font-mono">{formatTime(waitTime)}</span>
               </div>
             </div>
-          ) : (
-            <>
-              {/* Mock Video Content */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
-              <div className="absolute inset-0 flex items-center justify-center opacity-10">
-                <Zap className="w-32 h-32" />
-              </div>
-              
-              {/* Face HUD Overlay */}
-              <div className="absolute inset-0 border-2 border-accent/30 rounded-xl m-2 animate-pulse pointer-events-none" />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <motion.div 
-                  animate={{ y: [-5, 5, -5], x: [-2, 2, -2] }}
-                  transition={{ repeat: Infinity, duration: 4 }}
-                  className="w-48 h-64 border border-dashed border-accent/50 relative"
-                >
-                  <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-accent" />
-                  <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-accent" />
-                  <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-accent" />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-accent" />
-                  
-                  {matchState === "voting" || matchState === "result" ? (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                      <span className="text-[10px] text-accent font-bold uppercase tracking-widest bg-black/50 px-2 py-0.5 rounded">Unmog Score</span>
-                      <span className={`text-4xl font-black tabular-nums drop-shadow-lg ${matchState === 'result' ? (result === 'loss' ? 'text-green-500' : 'text-red-500') : 'text-white'}`}>
-                        {opponentScore}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-accent font-bold uppercase tracking-widest whitespace-nowrap bg-black/50 px-2 py-0.5 rounded animate-pulse">
-                      Analyzing...
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-
-              {/* Top UI */}
-              <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded text-xs font-bold uppercase tracking-widest border border-border/50 z-10">
-                {opponent}
-              </div>
-            </>
-          )}
+          </div>
         </div>
 
         {/* My Video */}
-        <div className="flex-1 bg-[#111] rounded-xl relative overflow-hidden border border-border/20">
+        <div className="flex-1 bg-[#111] rounded-2xl relative overflow-hidden border border-purple-500/20 animate-glow-pulse">
           <video 
             ref={videoRef} 
             autoPlay 
@@ -204,71 +134,23 @@ export default function Arena() {
             className="absolute inset-0 w-full h-full object-cover -scale-x-100"
           />
           
-          <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded text-xs font-bold uppercase tracking-widest border border-border/50 z-10">
-            You
+          <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-white/10 z-10 text-white flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            You (Live)
           </div>
-
-          {/* Face HUD Overlay */}
-          {!searching && (
-            <>
-              <div className="absolute inset-0 border-2 border-primary/30 rounded-xl m-2 animate-pulse pointer-events-none z-10" />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <motion.div 
-                  animate={{ y: [5, -5, 5], x: [2, -2, 2] }}
-                  transition={{ repeat: Infinity, duration: 4.5 }}
-                  className="w-48 h-64 border border-dashed border-primary/50 relative"
-                >
-                  <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-primary" />
-                  <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-primary" />
-                  <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-primary" />
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-primary" />
-                  
-                  {matchState === "voting" || matchState === "result" ? (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                      <span className="text-[10px] text-primary-foreground font-bold uppercase tracking-widest bg-black/50 px-2 py-0.5 rounded">Unmog Score</span>
-                      <span className={`text-4xl font-black tabular-nums drop-shadow-lg ${matchState === 'result' ? (result === 'win' ? 'text-green-500' : 'text-red-500') : 'text-white'}`}>
-                        {myScore}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-primary-foreground font-bold uppercase tracking-widest whitespace-nowrap bg-black/50 px-2 py-0.5 rounded animate-pulse">
-                      Analyzing...
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-            </>
-          )}
         </div>
       </main>
 
       {/* Bottom Action Bar */}
-      <footer className="h-24 shrink-0 bg-background border-t border-border flex items-center justify-center px-4 z-10 relative">
-        {matchState === "voting" ? (
+      <footer className="h-24 shrink-0 bg-[#050505] border-t border-white/5 flex items-center justify-center px-4 z-10 relative">
+        <Link href="/">
           <Button 
-            disabled
             size="lg"
-            className="h-14 px-8 bg-card text-muted-foreground rounded-full uppercase font-black tracking-widest text-lg flex items-center gap-2 w-full max-w-sm border border-border"
+            className="h-14 px-8 bg-white/5 text-white hover:bg-white/10 rounded-full uppercase font-bold tracking-widest text-sm flex items-center gap-2 w-full max-w-[200px] transition-all border border-white/10 hover:border-white/20"
           >
-            Community Voting...
+            Cancel <X className="w-4 h-4" />
           </Button>
-        ) : matchState === "result" ? (
-          <Button 
-            onClick={handleSkip}
-            size="lg"
-            className="h-14 px-8 bg-primary text-primary-foreground hover:bg-primary/90 rounded-full uppercase font-black tracking-widest text-lg flex items-center gap-2 w-full max-w-sm shadow-[0_0_20px_rgba(216,180,254,0.3)]"
-          >
-            Next Opponent <SkipForward className="w-5 h-5" />
-          </Button>
-        ) : (
-          <Button 
-            onClick={handleSkip}
-            size="lg"
-            className="h-14 px-8 bg-white text-black hover:bg-gray-200 rounded-full uppercase font-black tracking-widest text-lg flex items-center gap-2 w-full max-w-sm transition-all"
-          >
-            Skip <SkipForward className="w-5 h-5" />
-          </Button>
-        )}
+        </Link>
       </footer>
     </div>
   );
