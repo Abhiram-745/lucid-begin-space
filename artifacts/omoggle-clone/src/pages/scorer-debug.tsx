@@ -103,6 +103,15 @@ function Bar({ label, value, na = false }: { label: string; value: number; na?: 
   );
 }
 
+function RawMetric({ label, value, na = false }: { label: string; value: string; na?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 py-1.5 text-[10px] font-black uppercase tracking-[0.16em]">
+      <span className="text-white/40">{label}</span>
+      <span className={`tabular-nums ${na ? "text-white/25" : "text-cyan-100"}`}>{na ? "N/A" : value}</span>
+    </div>
+  );
+}
+
 export default function ScorerDebug() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -579,9 +588,23 @@ export default function ScorerDebug() {
                 <div className="space-y-2.5">
                   <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} na={!hasFace} />
                   <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} na={!hasFace} />
+                  <Bar label="Teeth exposure" value={breakdown?.spatial.teethExposure ?? 0} na={!hasFace} />
                   <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} na={!hasFace} />
                   <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} na={!hasFace} />
                   <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} na={!hasFace} />
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
+                  Raw debug · per-frame inputs
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-1">
+                  <RawMetric label="Asymmetry %" value={`${Math.round((breakdown?.spatial.raw.asymmetryPct ?? 0) * 100)}%`} na={!hasFace} />
+                  <RawMetric label="Chin compression" value={(breakdown?.spatial.raw.chinCompression ?? 0).toFixed(3)} na={!hasFace} />
+                  <RawMetric label="Head tilt angle" value={`${(breakdown?.spatial.raw.headTiltDeg ?? 0).toFixed(1)}°`} na={!hasFace} />
+                  <RawMetric label="Mouth distortion" value={(breakdown?.spatial.raw.mouthOpenRatio ?? 0).toFixed(3)} na={!hasFace} />
+                  <RawMetric label="Teeth signal" value={(breakdown?.spatial.raw.teethExposure ?? 0).toFixed(3)} na={!hasFace} />
                 </div>
               </div>
 
