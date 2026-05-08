@@ -101,9 +101,9 @@ export function AgeGateModal({ open, onOpenChange }: { open: boolean; onOpenChan
             {/* Fine print */}
             <p className="text-[10px] text-white/25 mt-6 leading-relaxed">
               By entering, you agree to our{" "}
-              <span className="text-purple-400 cursor-pointer hover:underline">Terms of Service</span>{" "}
+              <span className="text-purple-400 hover:underline">Terms of Service</span>{" "}
               and{" "}
-              <span className="text-purple-400 cursor-pointer hover:underline">Privacy Policy</span>.
+              <span className="text-purple-400 hover:underline">Privacy Policy</span>.
             </p>
           </motion.div>
         </motion.div>
