@@ -298,6 +298,7 @@ export default function Arena() {
       accent: "bg-[radial-gradient(circle_at_50%_100%,rgba(135,91,180,0.15),transparent_50%)]",
       hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(34,211,238,0.78),rgba(56,189,248,0.32)_42%,rgba(59,130,246,0.1)_70%,transparent_84%)]",
       hoverBorder: "hover:border-cyan-400/90 hover:shadow-[0_0_76px_rgba(34,211,238,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]",
+      href: "/scorer",
     },
   ];
 
