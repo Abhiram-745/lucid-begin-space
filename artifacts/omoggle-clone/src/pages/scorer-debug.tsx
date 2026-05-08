@@ -431,49 +431,49 @@ export default function ScorerDebug() {
           {/* Live features */}
           <aside className="rounded-[34px] border border-white/12 bg-white/[0.045] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.32)] backdrop-blur-md">
             <div className="text-[10px] font-black uppercase tracking-[0.28em] text-fuchsia-300">
-              Feature breakdown
+              Biometric readings
             </div>
             <h1 className="mt-3 text-2xl font-black uppercase tracking-[0.10em] text-white">
-              Realtime Chaos
+              Chaos Telemetry
             </h1>
             <p className="mt-3 text-[11px] font-bold uppercase leading-relaxed tracking-[0.12em] text-white/40">
-              Performative scoring only. No identity, no demographics.
+              Performative biometrics only. No identity, no demographics.
             </p>
 
             <div className="mt-6 space-y-4">
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Spatial
+                  Spatial · facial geometry
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Asymmetry" value={breakdown?.spatial.asymmetry ?? 0} />
-                  <Bar label="Mouth distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
-                  <Bar label="Eye chaos" value={breakdown?.spatial.eyeChaos ?? 0} />
-                  <Bar label="Chin compression" value={breakdown?.spatial.chinCompression ?? 0} />
-                  <Bar label="Head angle" value={breakdown?.spatial.headAngle ?? 0} />
+                  <Bar label="Facial asymmetry index" value={breakdown?.spatial.asymmetry ?? 0} />
+                  <Bar label="Expression distortion" value={breakdown?.spatial.mouthDistortion ?? 0} />
+                  <Bar label="Ocular instability" value={breakdown?.spatial.eyeChaos ?? 0} />
+                  <Bar label="Lower face compression" value={breakdown?.spatial.chinCompression ?? 0} />
+                  <Bar label="Cranial deviation" value={breakdown?.spatial.headAngle ?? 0} />
                 </div>
               </div>
 
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Temporal
+                  Temporal · motion over time
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Volatility" value={breakdown?.temporal.expressionVolatility ?? 0} />
-                  <Bar label="Motion" value={breakdown?.temporal.motionInstability ?? 0} />
-                  <Bar label="Commitment" value={breakdown?.temporal.commitment ?? 0} />
+                  <Bar label="Temporal chaos" value={breakdown?.temporal.expressionVolatility ?? 0} />
+                  <Bar label="Motion instability" value={breakdown?.temporal.motionInstability ?? 0} />
+                  <Bar label="Commitment lock" value={breakdown?.temporal.commitment ?? 0} />
                 </div>
               </div>
 
               <div>
                 <div className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-200 mb-2">
-                  Audio
+                  Audio · vocal disruption
                 </div>
                 <div className="space-y-2.5">
-                  <Bar label="Energy" value={breakdown?.audio.energy ?? 0} />
-                  <Bar label="Pitch variation" value={breakdown?.audio.pitchVariation ?? 0} />
+                  <Bar label="Audio disruption" value={breakdown?.audio.energy ?? 0} />
+                  <Bar label="Pitch deviation" value={breakdown?.audio.pitchVariation ?? 0} />
                   <Bar label="Spectral entropy" value={breakdown?.audio.spectralEntropy ?? 0} />
-                  <Bar label="Spike" value={breakdown?.audio.spike ?? 0} />
+                  <Bar label="Vocal spike" value={breakdown?.audio.spike ?? 0} />
                 </div>
               </div>
             </div>
