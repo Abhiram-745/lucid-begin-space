@@ -1,29 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, OctagonX, Radar, ScanFace, ShieldCheck } from "lucide-react";
-import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { ChevronLeft, OctagonX, Radar, ScanFace, ShieldCheck, Zap, Skull, Smile, AlertOctagon } from "lucide-react";
+import { useChaosPipeline } from "@/lib/use-chaos-pipeline";
+import { EventDetector, type InstantEvent } from "@/lib/instant-win";
 
 type Phase = "searching" | "live";
-type LandmarkPoint = { x: number; y: number };
 
 const MATCHMAKING_SECONDS = 10;
-const KEY_LANDMARKS = [
-  10,  // forehead
-  33,  // left eye
-  133,
-  362, // right eye
-  263,
-  1,   // nose bridge
-  2,   // nose tip
-  49,  // left cheek/nose wing
-  279, // right cheek/nose wing
-  61,  // mouth left
-  291, // mouth right
-  199, // chin upper
-  152, // chin lower
-  234, // left jaw
-  454, // right jaw
-];
+const ROUND_SECONDS = 60;
 
 function formatStopwatch(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -36,16 +20,23 @@ export default function LiveArena() {
   const [phase, setPhase] = useState<Phase>("searching");
   const [elapsed, setElapsed] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
-  const [modelReady, setModelReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [roundLeft, setRoundLeft] = useState(ROUND_SECONDS);
+  const [oppScore, setOppScore] = useState(0);
+  const [peakLocal, setPeakLocal] = useState(0);
+  const [peakOpp, setPeakOpp] = useState(0);
+  const [events, setEvents] = useState<InstantEvent[]>([]);
+  const [winner, setWinner] = useState<"you" | "opp" | "draw" | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const landmarkerRef = useRef<FaceLandmarker | null>(null);
-  const rafRef = useRef<number>(0);
-  const lastVideoTimeRef = useRef(-1);
-  const lastLandmarkPointsRef = useRef<LandmarkPoint[]>([]);
+  const detector = useRef(new EventDetector());
+  const oppRef = useRef(0); // simulated opponent score
+
+  const pipeline = useChaosPipeline({ videoRef, audioStream });
+  const localScore = pipeline.breakdown?.score ?? 0;
+  const modelReady = pipeline.ready;
 
   useEffect(() => {
     if (phase !== "searching") return;
@@ -64,54 +55,21 @@ export default function LiveArena() {
   }, [phase]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadLandmarker() {
-      try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-        );
-        const landmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "CPU",
-          },
-          runningMode: "VIDEO",
-          numFaces: 1,
-        });
-
-        if (!cancelled) {
-          landmarkerRef.current = landmarker;
-          setModelReady(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setModelReady(false);
-        }
-      }
-    }
-
-    loadLandmarker();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (phase !== "live") return;
 
     navigator.mediaDevices
       .getUserMedia({
         video: { facingMode: "user", width: 1280, height: 720 },
-        audio: false,
+        audio: true,
       })
       .then((stream) => {
         streamRef.current = stream;
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+          // Mute the local video element to avoid feedback; audio is analysed separately.
+          const videoOnly = new MediaStream(stream.getVideoTracks());
+          videoRef.current.srcObject = videoOnly;
         }
+        setAudioStream(new MediaStream(stream.getAudioTracks()));
         setCameraReady(true);
       })
       .catch(() => {
@@ -121,88 +79,68 @@ export default function LiveArena() {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      setAudioStream(null);
       setCameraReady(false);
     };
   }, [phase]);
 
-  const drawLandmarks = useCallback(() => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const landmarker = landmarkerRef.current;
-
-    if (!video || !canvas || video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(drawLandmarks);
-      return;
-    }
-
-    const rect = video.getBoundingClientRect();
-    const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      rafRef.current = requestAnimationFrame(drawLandmarks);
-      return;
-    }
-
-    if (landmarker && video.currentTime !== lastVideoTimeRef.current) {
-      lastVideoTimeRef.current = video.currentTime;
-
-      try {
-        const result = landmarker.detectForVideo(video, performance.now());
-        const landmarks = result.faceLandmarks?.[0];
-
-        if (landmarks) {
-          lastLandmarkPointsRef.current = KEY_LANDMARKS.flatMap((index) => {
-            const point = landmarks[index];
-            return point ? [{ x: point.x, y: point.y }] : [];
-          });
+  // Round timer + simulated opponent + event detection
+  useEffect(() => {
+    if (phase !== "live" || winner) return;
+    const tick = window.setInterval(() => {
+      setRoundLeft((s) => {
+        if (s <= 1) {
+          window.clearInterval(tick);
+          // decide winner on time-out
+          setWinner((w) => w ?? (localScore >= oppRef.current ? "you" : "opp"));
+          return 0;
         }
-      } catch {
-        // MediaPipe can miss a frame while the stream warms up.
+        return s - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [phase, winner, localScore]);
+
+  // Drift the simulated opponent score toward a wandering target so the bar feels alive.
+  useEffect(() => {
+    if (phase !== "live" || winner) return;
+    let target = 4 + Math.random() * 3;
+    const id = window.setInterval(() => {
+      target = Math.max(1, Math.min(9, target + (Math.random() - 0.5) * 2.5));
+      oppRef.current = oppRef.current + (target - oppRef.current) * 0.18;
+      setOppScore(oppRef.current);
+      setPeakOpp((p) => Math.max(p, oppRef.current));
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [phase, winner]);
+
+  // Track local peak + run instant-win detector
+  useEffect(() => {
+    if (!pipeline.breakdown) return;
+    setPeakLocal((p) => Math.max(p, pipeline.breakdown!.score));
+    const audioSpike = pipeline.breakdown.audio.spike;
+    // Use simulated opponent mouth proxy from oppScore
+    const oppMouthProxy = Math.min(1, oppRef.current / 10 + Math.random() * 0.05);
+    const fired = detector.current.step(pipeline.breakdown, oppMouthProxy, true, audioSpike);
+    if (fired.length) {
+      setEvents((prev) => [...prev, ...fired].slice(-5));
+      for (const ev of fired) {
+        if (ev.type === "opponent_laugh") setWinner("you");
+        if (ev.type === "no_face") setWinner("you");
       }
     }
+  }, [pipeline.breakdown]);
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-
-    for (const point of lastLandmarkPointsRef.current) {
-      const x = point.x * canvas.width;
-      const y = point.y * canvas.height;
-
-      ctx.beginPath();
-      ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(34, 197, 94, 0.34)";
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(x, y, 4.2, 0, Math.PI * 2);
-      ctx.fillStyle = "#22e96b";
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = "rgba(34, 233, 107, 0.9)";
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-
-    ctx.restore();
-    rafRef.current = requestAnimationFrame(drawLandmarks);
+  const restart = useCallback(() => {
+    detector.current.reset();
+    setEvents([]);
+    setWinner(null);
+    setPeakLocal(0);
+    setPeakOpp(0);
+    setRoundLeft(ROUND_SECONDS);
+    oppRef.current = 0;
+    setOppScore(0);
   }, []);
-
-  useEffect(() => {
-    if (phase !== "live" || !cameraReady) return;
-
-    rafRef.current = requestAnimationFrame(drawLandmarks);
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [cameraReady, drawLandmarks, phase]);
 
   if (phase === "searching") {
     return (
