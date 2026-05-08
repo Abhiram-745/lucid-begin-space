@@ -141,6 +141,118 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   return { asymmetry, mouthDistortion, eyeChaos, chinCompression, headAngle };
 }
 
+/* ---------- perceived emotion (NOT scientific — performance cues only) ---------- */
+
+export interface EmotionFeatures {
+  surprise: number;     // wide eyes + dropped jaw
+  anger: number;        // brow lowered + lip tension + jaw clench
+  confusion: number;    // brow asymmetry + squint
+  exaggeration: number; // overall amplitude of expression
+  intensity: number;    // composite 0..1
+}
+
+export function extractEmotion(lm: Pt[]): EmotionFeatures {
+  const nf = normalizeLandmarks(lm);
+  const p = nf.points;
+
+  const leftOpen = dist(p[L.leftEyeTop], p[L.leftEyeBot]);
+  const rightOpen = dist(p[L.rightEyeTop], p[L.rightEyeBot]);
+  const eyeOpen = (leftOpen + rightOpen) / 2;
+  const mouthOpen = dist(p[L.mouthTop], p[L.mouthBot]);
+  const mouthWide = dist(p[L.mouthLeft], p[L.mouthRight]);
+
+  // brow height = distance from brow to eye center (negative y in canonical = up)
+  const browL = (p[L.browLeftIn].y + p[L.browLeftOut].y) / 2;
+  const browR = (p[L.browRightIn].y + p[L.browRightOut].y) / 2;
+  const eyeMidL = (p[L.leftEyeTop].y + p[L.leftEyeBot].y) / 2;
+  const eyeMidR = (p[L.rightEyeTop].y + p[L.rightEyeBot].y) / 2;
+  const browLiftL = eyeMidL - browL; // larger = brow raised
+  const browLiftR = eyeMidR - browR;
+  const browLift = (browLiftL + browLiftR) / 2;
+  const browAsym = Math.abs(browLiftL - browLiftR);
+
+  const surprise = clamp01(
+    0.5 * norm(eyeOpen, 0.10, 0.22) +
+    0.3 * norm(mouthOpen, 0.08, 0.5) +
+    0.2 * norm(browLift, 0.18, 0.38),
+  );
+
+  // anger: brow lowered (small lift) + mouth tension (narrow + slightly open)
+  const lipTension = norm(0.85 - mouthWide, 0, 0.35);
+  const browLowered = norm(0.20 - browLift, 0, 0.18);
+  const anger = clamp01(0.55 * browLowered + 0.45 * lipTension);
+
+  const squint = norm(0.06 - eyeOpen, 0, 0.05);
+  const confusion = clamp01(0.6 * norm(browAsym, 0.01, 0.10) + 0.4 * squint);
+
+  const exaggeration = clamp01(
+    0.4 * norm(mouthOpen, 0.05, 0.55) +
+    0.3 * norm(mouthWide, 0.55, 1.10) +
+    0.3 * norm(eyeOpen, 0.06, 0.22),
+  );
+
+  const intensity = clamp01(
+    Math.max(surprise, anger, confusion, exaggeration) * 0.7 +
+    0.3 * (surprise + anger + confusion + exaggeration) / 4,
+  );
+
+  return { surprise, anger, confusion, exaggeration, intensity };
+}
+
+/* ---------- structural signals (used INVERSELY — small weight) ---------- */
+
+export interface StructureFeatures {
+  symmetryIdeal: number;   // 1 = highly symmetric, 0 = irregular
+  ratioDeviation: number;  // distance from canonical thirds (0 = ideal, 1 = wild)
+  cantalDeviation: number; // exaggerated/awkward eye-corner tilt
+  inversion: number;       // composite — HIGH when face deviates from ideal
+}
+
+export function extractStructure(lm: Pt[]): StructureFeatures {
+  const nf = normalizeLandmarks(lm);
+  const p = nf.points;
+
+  const pairs: Array<[number, number]> = [
+    [L.cheekLeft, L.cheekRight],
+    [L.mouthLeft, L.mouthRight],
+    [L.jawLeft, L.jawRight],
+    [L.browLeftOut, L.browRightOut],
+  ];
+  let asym = 0;
+  for (const [a, b] of pairs) {
+    asym += Math.abs(Math.abs(p[a].x) - Math.abs(p[b].x)) + Math.abs(p[a].y - p[b].y);
+  }
+  const symmetryIdeal = clamp01(1 - norm(asym, 0.02, 0.45));
+
+  // Vertical thirds: forehead->brow, brow->nose, nose->chin should be ~equal.
+  const fy = p[L.foreheadCenter].y;
+  const by = (p[L.browLeftIn].y + p[L.browRightIn].y) / 2;
+  const ny = p[L.noseTip].y;
+  const cy = p[L.chin].y;
+  const t1 = Math.abs(by - fy);
+  const t2 = Math.abs(ny - by);
+  const t3 = Math.abs(cy - ny);
+  const total = t1 + t2 + t3 || 1e-6;
+  const ideal = total / 3;
+  const ratioDeviation = clamp01(
+    norm((Math.abs(t1 - ideal) + Math.abs(t2 - ideal) + Math.abs(t3 - ideal)) / total, 0.05, 0.45),
+  );
+
+  // Cantal-tilt proxy: angle between inner and outer corners of each eye.
+  const lTilt = Math.atan2(p[L.leftEyeOut].y - p[L.leftEyeIn].y, p[L.leftEyeOut].x - p[L.leftEyeIn].x);
+  const rTilt = Math.atan2(p[L.rightEyeIn].y - p[L.rightEyeOut].y, p[L.rightEyeIn].x - p[L.rightEyeOut].x);
+  const cantalDeviation = clamp01(norm((Math.abs(lTilt) + Math.abs(rTilt)) / 2, 0.05, 0.35));
+
+  // Inversion: reward deviation from ideal — but keep magnitude modest.
+  const inversion = clamp01(
+    0.5 * (1 - symmetryIdeal) +
+    0.3 * ratioDeviation +
+    0.2 * cantalDeviation,
+  );
+
+  return { symmetryIdeal, ratioDeviation, cantalDeviation, inversion };
+}
+
 /* ---------- temporal tracker ---------- */
 
 export interface TemporalFeatures {
@@ -296,6 +408,15 @@ export interface ChaosBreakdown {
   spatial: SpatialFeatures;
   temporal: TemporalFeatures;
   audio: AudioFeatures;
+  emotion: EmotionFeatures;
+  structure: StructureFeatures;
+  chaosEnergy: number;       // 0..1 — composite "stress signal" for HUD
+  readouts: {
+    chaosEnergy: "DORMANT" | "RISING" | "HIGH" | "EXTREME";
+    emotion: "NEUTRAL" | "SURPRISE" | "ANGER" | "CONFUSION" | "EXAGGERATED";
+    performance: "IDLE" | "ACTIVE" | "INTENSE" | "EXTREME";
+    deviation: number;       // facial deviation %
+  };
   score: number; // 0..10
 }
 
@@ -327,6 +448,8 @@ export function scoreFromFeatures(
   a: AudioFeatures,
   w: Weights = DEFAULT_WEIGHTS,
   prevScore = 0,
+  e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0 },
+  st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
 ): ChaosBreakdown {
   const weightSum = Object.values(w).reduce((sum, v) => sum + v, 0);
 
@@ -359,6 +482,13 @@ export function scoreFromFeatures(
   // Step 4: commitment bonus — sustained intensity gets a flat reward.
   if (t.commitment > 0.55) curved += 0.08 + 0.12 * (t.commitment - 0.55);
 
+  // Step 5: perceived-emotion bump — performance, not structure.
+  curved += 0.14 * e.intensity;
+
+  // Step 6: structural INVERSION — small weight (~10%). Aesthetic ideal
+  // gets a tiny penalty; deviation gets a tiny boost.
+  curved += 0.10 * (st.inversion - 0.5);
+
   const target = clamp01(curved) * 10;
 
   // Smoothing — fast rise, slow fall, but allow peaks to punch through.
@@ -373,5 +503,34 @@ export function scoreFromFeatures(
   if (score < 0) score = 0;
   if (score > 10) score = 10;
 
-  return { spatial: s, temporal: t, audio: a, score };
+  // Composite "chaos energy" (HUD readout — does NOT feed back into score).
+  const chaosEnergy = clamp01(
+    0.35 * t.motionInstability +
+    0.30 * t.expressionVolatility +
+    0.20 * a.energy +
+    0.15 * a.spike,
+  );
+
+  // Status labels for HUD
+  const chaosLabel: ChaosBreakdown["readouts"]["chaosEnergy"] =
+    chaosEnergy > 0.78 ? "EXTREME" : chaosEnergy > 0.55 ? "HIGH" : chaosEnergy > 0.30 ? "RISING" : "DORMANT";
+  const emotions: Array<[ChaosBreakdown["readouts"]["emotion"], number]> = [
+    ["SURPRISE", e.surprise], ["ANGER", e.anger],
+    ["CONFUSION", e.confusion], ["EXAGGERATED", e.exaggeration],
+  ];
+  emotions.sort((x, y) => y[1] - x[1]);
+  const emotionLabel = emotions[0][1] > 0.45 ? emotions[0][0] : "NEUTRAL";
+  const perfLabel: ChaosBreakdown["readouts"]["performance"] =
+    score > 8.5 ? "EXTREME" : score > 6.5 ? "INTENSE" : score > 3.5 ? "ACTIVE" : "IDLE";
+
+  return {
+    spatial: s, temporal: t, audio: a, emotion: e, structure: st,
+    chaosEnergy, score,
+    readouts: {
+      chaosEnergy: chaosLabel,
+      emotion: emotionLabel,
+      performance: perfLabel,
+      deviation: Math.round(st.inversion * 100),
+    },
+  };
 }
