@@ -320,7 +320,7 @@ function SearchingScreen({
 }
 
 function VideoTile({
-  videoRef, label, score, color, mirror, badges, empty,
+  videoRef, label, score, color, mirror, badges, empty, noFace, traits,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   label: string;
@@ -329,11 +329,13 @@ function VideoTile({
   mirror?: boolean;
   badges: InstantEvent[];
   empty?: boolean;
+  noFace?: boolean;
+  traits?: { good: Array<{ label: string; v: number }>; bad: Array<{ label: string; v: number }> };
 }) {
   const pct = Math.max(0, Math.min(100, (score / 10) * 100));
   const grad = color === "emerald" ? "from-emerald-400 to-cyan-300" : "from-violet-400 to-fuchsia-400";
   return (
-    <div className="relative min-h-[420px] overflow-hidden rounded-[24px] border border-white/14 bg-[#070914]">
+    <div className="relative min-h-[300px] overflow-hidden rounded-[20px] border border-white/14 bg-[#070914] sm:min-h-[420px]">
       <video
         ref={videoRef}
         autoPlay
@@ -349,11 +351,46 @@ function VideoTile({
           </div>
         </div>
       )}
+      {noFace && !empty && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+          <div className="text-center">
+            <AlertOctagon className="mx-auto mb-3 h-10 w-10 text-red-300" />
+            <div className="text-xs font-black uppercase tracking-[0.24em] text-red-200">No face detected</div>
+            <div className="mt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/45">Center yourself in frame</div>
+          </div>
+        </div>
+      )}
       <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white">{label}</div>
       <div className="absolute right-4 top-4 rounded-[14px] border border-white/15 bg-black/55 px-3 py-2 text-right backdrop-blur-md">
         <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">UNMOG</div>
         <div className="text-3xl font-black tracking-[-0.05em] text-white">{score.toFixed(1)}</div>
       </div>
+      {traits && (traits.good.length > 0 || traits.bad.length > 0) && !noFace && (
+        <div className="absolute right-3 top-20 max-w-[200px] rounded-[12px] border border-white/15 bg-black/60 p-2 backdrop-blur-md">
+          {traits.bad.length > 0 && (
+            <div className="mb-1.5">
+              <div className="mb-1 text-[8px] font-black uppercase tracking-[0.2em] text-rose-300">Boosting</div>
+              {traits.bad.map((t) => (
+                <div key={t.label} className="flex items-center gap-1.5 text-[10px] text-white/85">
+                  <X className="h-3 w-3 shrink-0 text-rose-400" />
+                  <span className="truncate">{t.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {traits.good.length > 0 && (
+            <div>
+              <div className="mb-1 text-[8px] font-black uppercase tracking-[0.2em] text-emerald-300">Lowering</div>
+              {traits.good.map((t) => (
+                <div key={t.label} className="flex items-center gap-1.5 text-[10px] text-white/85">
+                  <Check className="h-3 w-3 shrink-0 text-emerald-400" />
+                  <span className="truncate">{t.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="absolute inset-x-4 bottom-4">
         <div className="h-2 overflow-hidden rounded-full bg-white/10">
           <div className={`h-full rounded-full bg-gradient-to-r ${grad} transition-all duration-150`} style={{ width: `${pct}%` }} />
