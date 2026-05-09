@@ -651,14 +651,31 @@ export function scoreFromFeatures(
 
   const targetScore = target01 * 10;
 
-  // ---- 6. Temporal stability — EMA + clamped delta -----------------------
-  // alpha controls smoothing (0.20–0.30 sweet spot).
-  // Hard cap on per-frame change keeps the readout believable.
-  const alpha = 0.22;
+  // ---- 6. Temporal stability — ASYMMETRIC EMA ----------------------------
+  // Climbing into a high score should feel earned (slow ramp), but once the
+  // face relaxes the readout MUST return to baseline immediately — otherwise
+  // it looks like the scorer is hallucinating ugliness that isn't there.
+  // So: gentle attack, aggressive release.
   const delta = targetScore - prevScore;
-  const maxJump = 0.8; // ~0.8 / frame at 30 FPS = full-range swing in ~0.5 s
-  const clampedDelta = Math.max(-maxJump, Math.min(maxJump, delta));
-  let score = prevScore + alpha * clampedDelta;
+  let score: number;
+  if (delta >= 0) {
+    // Attack — same behaviour as before
+    const alpha = 0.22;
+    const maxJump = 0.8;
+    const clampedDelta = Math.min(maxJump, delta);
+    score = prevScore + alpha * clampedDelta;
+  } else {
+    // Release — much faster. Snap toward target when the gap is large
+    // (face has clearly calmed), gentler when already close.
+    const gap = -delta; // positive
+    const alpha = gap > 2.0 ? 0.55 : 0.38;
+    const maxJump = 2.5; // ~75/sec at 30 FPS — visually instantaneous decay
+    const clampedDelta = -Math.min(maxJump, gap);
+    score = prevScore + alpha * clampedDelta;
+    // Hard floor: never let the smoothed score sit more than 1.5 above the
+    // current honest target. Kills any residual "stuck high" hallucination.
+    if (score - targetScore > 1.5) score = targetScore + 1.5;
+  }
   if (score < 0) score = 0;
   if (score > 10) score = 10;
 
