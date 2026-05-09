@@ -533,24 +533,20 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // PHILOSOPHY: "ugliness / unmoggable look" score.
-  // HIGH when: double chin, facial asymmetry, negative cantal tilt,
-  // weird/contorted lips, tongue out, bad/yellow teeth, sneers, eye
-  // mismatch, ratio deviation. LOW when: symmetric, smiling, clean skin,
-  // facing camera with neutral pose. Hollow cheeks = NEUTRAL (not bad).
-  asymmetry: 2.20,
-  chinCompression: 2.80,     // double-chin / jowls — heaviest
-  mouthDistortion: 1.40,     // weird lips, funny faces, tongue-out proxy
-  teethExposure: 0.60,       // wide gaping mouth bumps it
-  eyeChaos: 0.80,
-  headAngle: 0.05,
-  expressionVolatility: 0.15,
-  motionInstability: 0.05,
-  audioEnergy: 0.0,
-  audioPitch: 0.0,
-  audioEntropy: 0.0,
-  audioSpike: 0.0,
-  commitment: 0.30,
+  // UNMOG v2 — performance > structure.
+  // PERFORMANCE BLOCK (75% of score) — what the user is *doing*.
+  distortion: 0.22,            // mouth / lip / tongue contortion
+  eyeChaos: 0.16,              // wide / squint / mismatched eyes
+  chinCompression: 0.22,       // double-chin / lower-face squash
+  motionInstability: 0.12,     // erratic head movement
+  expressionVolatility: 0.10,  // expression changing fast
+  commitment: 0.18,            // sustained chaos
+  // STRUCTURAL BLOCK (25% of score) — static facial geometry.
+  asymmetry: 0.40,
+  ratioDeviation: 0.25,
+  cantalDeviation: 0.35,
+  // Bonus: awkward head angle nudges score up slightly.
+  headAngle: 0.06,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -571,176 +567,114 @@ export function scoreFromFeatures(
   s: SpatialFeatures,
   t: TemporalFeatures,
   a: AudioFeatures,
-  w: Weights = DEFAULT_WEIGHTS,
+  _w: Weights = DEFAULT_WEIGHTS,
   prevScore = 0,
   e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0, genuineSmile: 0, weirdSmile: 0, tongueOut: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
-  skinRoughness = 0,
-  dentalSignal = 0,
+  _skinRoughness = 0,
+  _dentalSignal = 0,
   /** 0..1 — multiplied into the final score. Low = no face / unstable. */
   confidence = 1,
 ): ChaosBreakdown {
-  // ---- 1. Dead-zoned, normalized features --------------------------------
-  // Every feature is already 0..1 from extraction. Apply a small dead zone
-  // so micro-jitter (lighting flicker, sub-pixel landmark noise) yields 0.
-  const f = {
-    asymmetry:           deadzone(s.asymmetry),
-    mouthDistortion:     deadzone(s.mouthDistortion, 0.10),
-    teethExposure:       deadzone(s.teethExposure, 0.08),
-    eyeChaos:            deadzone(s.eyeChaos, 0.08),
-    chinCompression:     deadzone(s.chinCompression, 0.08),
-    headAngle:           deadzone(s.headAngle, 0.10),
-    expressionVolatility:deadzone(t.expressionVolatility, 0.05),
-    motionInstability:   deadzone(t.motionInstability, 0.05),
-    audioEnergy:         deadzone(a.energy, 0.08),
-    audioPitch:          deadzone(a.pitchVariation, 0.08),
-    audioEntropy:        deadzone(a.spectralEntropy, 0.05),
-    audioSpike:          deadzone(a.spike, 0.10),
-    commitment:          deadzone(t.commitment, 0.10),
-  };
+  // ============================================================
+  // UNMOG SCORING v2 — REVERSED LOOKSMAXX MODEL
+  // ------------------------------------------------------------
+  //   aesthetic / ideal  →  LOW score (1–3)
+  //   neutral resting    →  2–4
+  //   distorted / silly  →  HIGH score (6–10)
+  //
+  // Composition:  performance (75%) + structural deviation (25%)
+  // Pipeline:     deadzone → weighted sum → sigmoid → 0..10
+  //               then symmetric EMA + dead-band for stability
+  // ============================================================
 
-  // ---- 2. STRUCTURAL UGLINESS (dominant) ---------------------------------
-  // Things that make a face actually look bad regardless of what it's doing:
-  // double chin, facial asymmetry, ratio deviation from canonical thirds,
-  // negative/flat cantal tilt. Cantal deviation is heavily boosted because
-  // it's the single biggest "unmoggable" structural cue.
-  const structuralUgly = clamp01(
-    0.34 * f.chinCompression +
-    0.24 * f.asymmetry +
-    0.16 * st.ratioDeviation +
-    0.26 * st.cantalDeviation
-  );
-
-  // ---- 3. SURFACE UGLINESS — skin + teeth ---------------------------------
-  const surfaceUgly = clamp01(
-    0.55 * skinRoughness +
-    0.45 * dentalSignal
-  );
-
-  // ---- 4. EXPRESSION UGLINESS — funny faces, weird lips, tongue out ------
-  // CRITICAL: a smile also shows teeth and stretches the mouth, so we MUST
-  // veto the teeth/mouth-distortion channels when a smile is detected,
-  // otherwise a happy face gets scored as ugly. Only count exposed teeth
-  // / wide mouth as "ugly" when there's no smile.
-  // Veto ONLY for genuine, symmetric smiles. Weird/lopsided smiles or
-  // smile-with-tongue-out should still score as ugly.
-  const genuineVeto = clamp01(1 - e.genuineSmile * 1.5);   // genuine≈0.66 → full veto
-  const grimaceGate = clamp01(e.grimace * 1.3 + (1 - e.genuineSmile));
-  // Tongue-out is its OWN signal now — never vetoed by smile.
-  const tongueChannel = clamp01(e.tongueOut * 1.2);
-  const teethChannel = clamp01(f.teethExposure * genuineVeto);
-  const weirdLips = clamp01(f.mouthDistortion * genuineVeto);
-  const grimaceLike = clamp01(
-    0.26 * e.grimace +
-    0.14 * (e.anger * (1 - e.genuineSmile)) +
-    0.18 * weirdLips +
-    0.16 * teethChannel +
-    0.20 * tongueChannel +
-    0.12 * e.weirdSmile +
-    0.06 * (f.mouthDistortion * f.chinCompression * 1.6 * genuineVeto)
-  ) * grimaceGate;
-
-  // ---- 5. BEAUTY CREDIT (subtracted, lighter) -----------------------------
-  // Smaller subtraction so genuine ugliness signals can climb high. We do
-  // NOT subtract for hollow cheeks or sharp jaw — those are good looks
-  // and absent from this composite. Smile contribution is reduced so
-  // "funny faces" with smiles still register as chaotic.
-  const teethWhiteness = clamp01(1 - dentalSignal);
-  const skinSmoothness = clamp01(1 - skinRoughness);
-  // A clean, well-proportioned RESTING face should already score low — we
-  // don't need a smile to bring the score down. So the beauty credit weighs
-  // structural goodness (symmetry, ratios, positive cantal tilt, smooth
-  // skin, low expression amplitude) over smiling.
-  const restingComposure = clamp01(1 - Math.max(f.mouthDistortion, f.eyeChaos, e.exaggeration));
-  const beauty = clamp01(
-    0.26 * st.symmetryIdeal +
-    0.16 * (1 - st.ratioDeviation) +
-    0.20 * (1 - st.cantalDeviation) +
-    0.10 * e.genuineSmile +              // only genuine smiles are "good"
-    0.10 * restingComposure +            // calm neutral face = good look
-    0.08 * skinSmoothness +
-    0.06 * teethWhiteness +
-    0.04 * (1 - f.headAngle)
-  );
-
-  // ---- 6. COMBINE ---------------------------------------------------------
-  const ugliness = clamp01(
-    0.40 * structuralUgly +
-    0.20 * surfaceUgly +
-    0.40 * grimaceLike
-  );
-
-  // Lighter beauty subtraction so a real double-chin / sneer / tongue-out
-  // / negative cantal tilt frame can land in the 7–10 zone.
-  // Stronger beauty subtraction so a clean, smiling, symmetric face lands LOW
-  // even if a few low-level signals are noisy.
-  const combined = clamp01(ugliness - 0.50 * beauty);
-
-  // Lower midpoint + steeper slope so bad-look frames climb fast while a
-  // clean neutral face still stays under ~3/10. Slight push so silly faces
-  // can reach the 8–10 zone more easily.
-  let target01 = sigmoid01(combined, 8.0, 0.24);
-
-  // ---- 5. Confidence weighting -------------------------------------------
+  // ---- 0. Confidence gating ---------------------------------------------
   const conf = clamp01(confidence);
-  target01 = target01 * conf;
 
+  // ---- 1. Dead-zoned channels (kill micro-jitter) -----------------------
+  const dz = (v: number, th = 0.06) => deadzone(v, th);
+
+  // Performance: distortion = mouth contortion + tongue + weird/asymmetric
+  // smile + grimace, all vetoed when a genuine symmetric smile is present
+  // (so a happy face doesn't accidentally count as ugly).
+  const genuineVeto = clamp01(1 - e.genuineSmile * 1.4);
+  const distortionRaw =
+    0.42 * s.mouthDistortion * genuineVeto +
+    0.22 * e.tongueOut +
+    0.16 * e.weirdSmile +
+    0.12 * e.grimace +
+    0.08 * s.teethExposure * genuineVeto;
+  const distortion = dz(clamp01(distortionRaw), 0.08);
+
+  const eyeChaos      = dz(s.eyeChaos, 0.08);
+  const chin          = dz(s.chinCompression, 0.08);
+  const motion        = dz(t.motionInstability, 0.05);
+  const volatility    = dz(t.expressionVolatility, 0.05);
+  const commitment    = dz(t.commitment, 0.10);
+  const headAngle     = dz(s.headAngle, 0.10);
+
+  // Structural channels (low impact)
+  const asymmetry       = dz(s.asymmetry, 0.06);
+  const ratioDeviation  = dz(st.ratioDeviation, 0.06);
+  const cantalDeviation = dz(st.cantalDeviation, 0.06);
+
+  // ---- 2. PERFORMANCE BLOCK (75%) ---------------------------------------
+  const performance =
+    0.24 * distortion +
+    0.16 * eyeChaos +
+    0.22 * chin +
+    0.12 * motion +
+    0.10 * volatility +
+    0.16 * commitment;
+
+  // ---- 3. STRUCTURAL DEVIATION (25%) ------------------------------------
+  const structural =
+    0.40 * asymmetry +
+    0.25 * ratioDeviation +
+    0.35 * cantalDeviation;
+
+  // ---- 4. COMPOSITE -----------------------------------------------------
+  // Tiny head-angle bonus — awkward angles add a touch of chaos.
+  const composite = clamp01(
+    0.75 * performance +
+    0.25 * structural +
+    0.05 * headAngle,
+  );
+
+  // Aesthetic credit: small subtraction for a clean, symmetric, well-
+  // proportioned face so "good looks" land in 1–3 instead of 2–4.
+  const aesthetic = clamp01(
+    0.45 * st.symmetryIdeal +
+    0.30 * (1 - st.ratioDeviation) +
+    0.25 * (1 - st.cantalDeviation),
+  );
+  const adjusted = clamp01(composite - 0.10 * aesthetic);
+
+  // ---- 5. Sigmoid → 0..10 -----------------------------------------------
+  // Tuned so:
+  //   composite ≈ 0.05 (ideal)    → ~1.5
+  //   composite ≈ 0.12 (neutral)  → ~2.6
+  //   composite ≈ 0.30 (mild)     → ~5.0
+  //   composite ≈ 0.50 (strong)   → ~7.4
+  //   composite ≈ 0.70 (extreme)  → ~9.0
+  const target01 = sigmoid01(adjusted, 5.5, 0.30) * conf;
   const targetScore = target01 * 10;
 
-  // ---- 6. Temporal stability — ASYMMETRIC EMA + DEAD-BAND ----------------
-  // Dead-band: if the new target is within ±0.35 of the previous score, hold
-  // the previous value. Kills the constant micro-fluctuations while a still
-  // face is in front of the camera.
-  if (Math.abs(targetScore - prevScore) < 0.35) {
-    const score = prevScore;
-    const chaosEnergy = clamp01(
-      0.35 * t.motionInstability +
-      0.30 * t.expressionVolatility +
-      0.20 * a.energy +
-      0.15 * a.spike,
-    );
-    const chaosLabel: ChaosBreakdown["readouts"]["chaosEnergy"] =
-      chaosEnergy > 0.78 ? "EXTREME" : chaosEnergy > 0.55 ? "HIGH" : chaosEnergy > 0.30 ? "RISING" : "DORMANT";
-    const emotionsHold: Array<[ChaosBreakdown["readouts"]["emotion"], number]> = [
-      ["SURPRISE", e.surprise], ["ANGER", e.anger],
-      ["CONFUSION", e.confusion], ["EXAGGERATED", e.exaggeration],
-    ];
-    emotionsHold.sort((x, y) => y[1] - x[1]);
-    const emotionLabel = emotionsHold[0][1] > 0.45 ? emotionsHold[0][0] : "NEUTRAL";
-    const perfLabel: ChaosBreakdown["readouts"]["performance"] =
-      score > 8.5 ? "EXTREME" : score > 6.5 ? "INTENSE" : score > 3.5 ? "ACTIVE" : "IDLE";
-    return {
-      spatial: s, temporal: t, audio: a, emotion: e, structure: st,
-      chaosEnergy, score,
-      readouts: {
-        chaosEnergy: chaosLabel, emotion: emotionLabel, performance: perfLabel,
-        deviation: Math.round(st.inversion * 100),
-      },
-    };
-  }
-  // Climbing into a high score should feel earned (slow ramp), but once the
-  // face relaxes the readout MUST return to baseline immediately — otherwise
-  // it looks like the scorer is hallucinating ugliness that isn't there.
-  // So: gentle attack, aggressive release.
-  const delta = targetScore - prevScore;
+  // ---- 6. Temporal stability — symmetric EMA + dead-band ----------------
+  // Anti-randomness: if the new target is within ±0.25 of the previous
+  // score, hold the previous value. Removes constant micro-fluctuation
+  // while the user holds a still face.
   let score: number;
-  if (delta >= 0) {
-    // Attack — same behaviour as before
-    const alpha = 0.22;
-    const maxJump = 0.8;
-    const clampedDelta = Math.min(maxJump, delta);
-    score = prevScore + alpha * clampedDelta;
+  const diff = targetScore - prevScore;
+  if (Math.abs(diff) < 0.25) {
+    score = prevScore;
   } else {
-    // Release — much faster. Snap toward target when the gap is large
-    // (face has clearly calmed), gentler when already close.
-    const gap = -delta; // positive
-    const alpha = gap > 2.0 ? 0.55 : 0.38;
-    const maxJump = 2.5; // ~75/sec at 30 FPS — visually instantaneous decay
-    const clampedDelta = -Math.min(maxJump, gap);
+    // EMA, alpha 0.25 (per spec). Limit per-frame jump so big swings still
+    // feel reactive but never teleport.
+    const alpha = 0.25;
+    const maxJump = 1.5;
+    const clampedDelta = Math.max(-maxJump, Math.min(maxJump, diff));
     score = prevScore + alpha * clampedDelta;
-    // Hard floor: never let the smoothed score sit more than 1.5 above the
-    // current honest target. Kills any residual "stuck high" hallucination.
-    if (score - targetScore > 1.5) score = targetScore + 1.5;
   }
   if (score < 0) score = 0;
   if (score > 10) score = 10;
