@@ -1,6 +1,7 @@
 [build]
-  command = "cd artifacts/omoggle-clone && pnpm exec vite build --config vite.config.ts"
-  publish = "artifacts/omoggle-clone/dist/public"
+  base = "artifacts/omoggle-clone"
+  command = "cd ../.. && corepack pnpm install --frozen-lockfile --ignore-scripts && corepack pnpm --filter @workspace/omoggle-clone run build"
+  publish = "dist/public"
 
 [build.environment]
   NODE_VERSION = "22"
