@@ -192,6 +192,10 @@ export interface EmotionFeatures {
   confusion: number;    // brow asymmetry + squint
   exaggeration: number; // overall amplitude of expression
   intensity: number;    // composite 0..1
+  /** 0..1 — corners-up smile detector. HIGH when smiling/laughing (= GOOD look). */
+  smile: number;
+  /** 0..1 — corners-down grimace / disgust / sneer (= BAD look). */
+  grimace: number;
 }
 
 export function extractEmotion(lm: Pt[]): EmotionFeatures {
@@ -234,12 +238,28 @@ export function extractEmotion(lm: Pt[]): EmotionFeatures {
     0.3 * norm(eyeOpen, 0.06, 0.22),
   );
 
+  /* Smile vs grimace — corner direction relative to mouth center.
+   * In canonical (y-down) space, corners ABOVE the mouth midline (smaller y)
+   * = corners up = smile. Corners below = grimace. We also require that
+   * BOTH corners agree (symmetry), otherwise it's a sneer (still bad). */
+  const mouthMidY = (p[L.mouthTop].y + p[L.mouthBot].y) / 2;
+  const cornerLY = p[L.mouthLeft].y;
+  const cornerRY = p[L.mouthRight].y;
+  // Negative = corner above midline (smiling); positive = corner below (frown).
+  const cornerLLift = mouthMidY - cornerLY;
+  const cornerRLift = mouthMidY - cornerRY;
+  const cornerLift = (cornerLLift + cornerRLift) / 2;
+  const cornerSym = 1 - clamp01(Math.abs(cornerLLift - cornerRLift) / 0.12);
+  const widening = norm(mouthWide, 0.62, 1.05);
+  const smile = clamp01(norm(cornerLift, 0.005, 0.06) * (0.55 + 0.45 * cornerSym) * (0.6 + 0.4 * widening));
+  const grimace = clamp01(norm(-cornerLift, 0.005, 0.05) * (0.5 + 0.5 * (1 - cornerSym * 0.5)));
+
   const intensity = clamp01(
     Math.max(surprise, anger, confusion, exaggeration) * 0.7 +
     0.3 * (surprise + anger + confusion + exaggeration) / 4,
   );
 
-  return { surprise, anger, confusion, exaggeration, intensity };
+  return { surprise, anger, confusion, exaggeration, intensity, smile, grimace };
 }
 
 /* ---------- structural signals (used INVERSELY — small weight) ---------- */
@@ -493,21 +513,25 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // Performance ≈ 75 %, structural inversion ≈ 25 %.
-  // Sitting still + symmetric => LOW. Sustained chaotic distortion => HIGH.
-  asymmetry: 0.40,
-  mouthDistortion: 1.20,
-  teethExposure: 0.55,
-  eyeChaos: 0.90,
-  chinCompression: 0.40,
-  headAngle: 0.25,
-  expressionVolatility: 1.40,
-  motionInstability: 1.10,
-  audioEnergy: 0.70,
-  audioPitch: 0.35,
-  audioEntropy: 0.20,
-  audioSpike: 0.55,
-  commitment: 0.95,
+  // PHILOSOPHY: "ugliness" score, NOT "performance" score.
+  // Score is HIGH only when the user actually looks bad — double chin,
+  // facial asymmetry, structural deviation, rough/textured skin, yellow
+  // teeth, sneers/grimaces. Sitting still while symmetric & clean = LOW.
+  // Pulling expressive faces while still symmetric/attractive = LOW.
+  // Smiling = LOW (smiling looks GOOD, not bad).
+  asymmetry: 1.80,           // structural ugliness — heavy
+  chinCompression: 2.20,     // double-chin / jowls — heaviest
+  mouthDistortion: 0.20,     // de-emphasized — talking ≠ ugly
+  teethExposure: 0.10,       // visible teeth alone is neutral
+  eyeChaos: 0.30,
+  headAngle: 0.05,           // pose has nothing to do with looks
+  expressionVolatility: 0.10,
+  motionInstability: 0.05,
+  audioEnergy: 0.0,          // audio doesn't make you ugly
+  audioPitch: 0.0,
+  audioEntropy: 0.0,
+  audioSpike: 0.0,
+  commitment: 0.20,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -530,7 +554,7 @@ export function scoreFromFeatures(
   a: AudioFeatures,
   w: Weights = DEFAULT_WEIGHTS,
   prevScore = 0,
-  e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0 },
+  e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
   skinRoughness = 0,
   dentalSignal = 0,
@@ -542,11 +566,11 @@ export function scoreFromFeatures(
   // so micro-jitter (lighting flicker, sub-pixel landmark noise) yields 0.
   const f = {
     asymmetry:           deadzone(s.asymmetry),
-    mouthDistortion:     deadzone(s.mouthDistortion, 0.06),
-    teethExposure:       deadzone(s.teethExposure, 0.05),
+    mouthDistortion:     deadzone(s.mouthDistortion, 0.10),
+    teethExposure:       deadzone(s.teethExposure, 0.08),
     eyeChaos:            deadzone(s.eyeChaos, 0.08),
-    chinCompression:     deadzone(s.chinCompression, 0.04),
-    headAngle:           deadzone(s.headAngle, 0.04),
+    chinCompression:     deadzone(s.chinCompression, 0.08),
+    headAngle:           deadzone(s.headAngle, 0.10),
     expressionVolatility:deadzone(t.expressionVolatility, 0.05),
     motionInstability:   deadzone(t.motionInstability, 0.05),
     audioEnergy:         deadzone(a.energy, 0.08),
@@ -556,57 +580,66 @@ export function scoreFromFeatures(
     commitment:          deadzone(t.commitment, 0.10),
   };
 
-  // ---- 2. Performance bucket (~75 %) -------------------------------------
-  const perfWeights =
-    w.mouthDistortion + w.teethExposure + w.eyeChaos + w.expressionVolatility +
-    w.motionInstability + w.audioEnergy + w.audioPitch +
-    w.audioEntropy + w.audioSpike + w.commitment;
-  const performance =
-    (w.mouthDistortion       * f.mouthDistortion +
-     w.teethExposure         * f.teethExposure +
-     w.eyeChaos              * f.eyeChaos +
-     w.expressionVolatility  * f.expressionVolatility +
-     w.motionInstability     * f.motionInstability +
-     w.audioEnergy           * f.audioEnergy +
-     w.audioPitch            * f.audioPitch +
-     w.audioEntropy          * f.audioEntropy +
-     w.audioSpike            * f.audioSpike +
-     w.commitment            * f.commitment) / Math.max(perfWeights, 1e-6);
-
-  // ---- 3. Structural bucket (~25 %) — looksmaxx geometry, REVERSED -------
-  const structWeights = w.asymmetry + w.chinCompression + w.headAngle;
-  const structuralRaw =
-    (w.asymmetry       * f.asymmetry +
-     w.chinCompression * f.chinCompression +
-     w.headAngle       * f.headAngle) / Math.max(structWeights, 1e-6);
-  // Blend with explicit inversion (golden-ratio + cantal-tilt deviation)
-  // and subtract symmetry ideal — clean faces get suppressed.
-  const structural = clamp01(
-    0.55 * structuralRaw +
-    0.45 * st.inversion -
-    0.25 * st.symmetryIdeal,
+  // ---- 2. STRUCTURAL UGLINESS (dominant) ---------------------------------
+  // Things that make a face actually look bad regardless of what it's doing:
+  // chin compression (double chin / weak jaw collapsed), facial asymmetry,
+  // ratio deviation from canonical thirds, awkward cantal tilt.
+  const structuralUgly = clamp01(
+    0.36 * f.chinCompression +
+    0.26 * f.asymmetry +
+    0.20 * st.ratioDeviation +
+    0.18 * st.cantalDeviation
   );
 
-  // ---- 4. Combine + sigmoid soft-map -------------------------------------
-  const goodAesthetic = clamp01(
-    0.45 * st.symmetryIdeal +
-    0.25 * (1 - st.ratioDeviation) +
-    0.20 * (1 - st.cantalDeviation) +
-    0.10 * (1 - f.headAngle)
-  );
-  const badChaos = clamp01(
-    0.52 * performance +
-    0.26 * structural +
-    0.08 * e.intensity +
-    0.06 * skinRoughness +
-    0.06 * dentalSignal +
-    0.02 * f.teethExposure
+  // ---- 3. SURFACE UGLINESS — skin + teeth ---------------------------------
+  // dentalSignal already encodes (visibility * yellowTint). Treat raw white
+  // teeth as neutral; only yellow/exposed teeth in a non-smile context add.
+  const surfaceUgly = clamp01(
+    0.62 * skinRoughness +
+    0.38 * dentalSignal
   );
 
-  const combined = clamp01(0.30 + 1.00 * badChaos - 0.22 * goodAesthetic);
+  // ---- 4. EXPRESSION UGLINESS — grimaces, sneers, NOT smiles --------------
+  // Smiling looks GOOD even when the mouth is wide. Grimaces & contorted
+  // expressions paired with chin compression are what we want to flag.
+  const grimaceLike = clamp01(
+    0.55 * e.grimace +
+    0.20 * (e.anger * (1 - e.smile)) +
+    0.15 * (f.mouthDistortion * f.chinCompression * 1.6) +  // contorted lower face
+    0.10 * f.eyeChaos
+  );
 
-  // Sigmoid keeps the curve bounded and removes the aggressive multipliers.
-  let target01 = sigmoid01(combined, 5.2, 0.34);
+  // ---- 5. BEAUTY CREDIT (subtracted) --------------------------------------
+  // Symmetric, well-proportioned, smiling, smooth-skinned, white-teethed,
+  // facing camera = strong subtraction. Smile is treated as "looking good".
+  const teethWhiteness = clamp01(1 - dentalSignal); // low yellow signal
+  const skinSmoothness = clamp01(1 - skinRoughness);
+  const beauty = clamp01(
+    0.30 * st.symmetryIdeal +
+    0.18 * (1 - st.ratioDeviation) +
+    0.14 * (1 - st.cantalDeviation) +
+    0.16 * e.smile +                    // SMILING IS GOOD
+    0.10 * skinSmoothness +
+    0.08 * teethWhiteness +
+    0.04 * (1 - f.headAngle)            // facing camera
+  );
+
+  // ---- 6. COMBINE ---------------------------------------------------------
+  // Ugliness composite — structure dominates, surface + grimace add, audio
+  // is intentionally absent (talking doesn't make you ugly).
+  const ugliness = clamp01(
+    0.50 * structuralUgly +
+    0.28 * surfaceUgly +
+    0.22 * grimaceLike
+  );
+
+  // Net score: ugliness minus a strong beauty subtraction.
+  // Floor at 0; baseline of 0 means "looks fine, nothing flagged".
+  const combined = clamp01(ugliness - 0.55 * beauty);
+
+  // Steeper sigmoid centered higher so attractive/neutral faces stay LOW
+  // and only genuinely bad-looking frames climb past ~5/10.
+  let target01 = sigmoid01(combined, 7.0, 0.42);
 
   // ---- 5. Confidence weighting -------------------------------------------
   const conf = clamp01(confidence);
