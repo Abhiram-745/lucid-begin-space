@@ -513,25 +513,24 @@ export interface ChaosBreakdown {
  * Tweak liberally; entertainment > accuracy.
  */
 export const DEFAULT_WEIGHTS = {
-  // PHILOSOPHY: "ugliness" score, NOT "performance" score.
-  // Score is HIGH only when the user actually looks bad — double chin,
-  // facial asymmetry, structural deviation, rough/textured skin, yellow
-  // teeth, sneers/grimaces. Sitting still while symmetric & clean = LOW.
-  // Pulling expressive faces while still symmetric/attractive = LOW.
-  // Smiling = LOW (smiling looks GOOD, not bad).
-  asymmetry: 1.80,           // structural ugliness — heavy
-  chinCompression: 2.20,     // double-chin / jowls — heaviest
-  mouthDistortion: 0.20,     // de-emphasized — talking ≠ ugly
-  teethExposure: 0.10,       // visible teeth alone is neutral
-  eyeChaos: 0.30,
-  headAngle: 0.05,           // pose has nothing to do with looks
-  expressionVolatility: 0.10,
+  // PHILOSOPHY: "ugliness / unmoggable look" score.
+  // HIGH when: double chin, facial asymmetry, negative cantal tilt,
+  // weird/contorted lips, tongue out, bad/yellow teeth, sneers, eye
+  // mismatch, ratio deviation. LOW when: symmetric, smiling, clean skin,
+  // facing camera with neutral pose. Hollow cheeks = NEUTRAL (not bad).
+  asymmetry: 2.20,
+  chinCompression: 2.80,     // double-chin / jowls — heaviest
+  mouthDistortion: 1.40,     // weird lips, funny faces, tongue-out proxy
+  teethExposure: 0.60,       // wide gaping mouth bumps it
+  eyeChaos: 0.80,
+  headAngle: 0.05,
+  expressionVolatility: 0.15,
   motionInstability: 0.05,
-  audioEnergy: 0.0,          // audio doesn't make you ugly
+  audioEnergy: 0.0,
   audioPitch: 0.0,
   audioEntropy: 0.0,
   audioSpike: 0.0,
-  commitment: 0.20,
+  commitment: 0.30,
 };
 
 export type Weights = typeof DEFAULT_WEIGHTS;
@@ -582,66 +581,69 @@ export function scoreFromFeatures(
 
   // ---- 2. STRUCTURAL UGLINESS (dominant) ---------------------------------
   // Things that make a face actually look bad regardless of what it's doing:
-  // chin compression (double chin / weak jaw collapsed), facial asymmetry,
-  // ratio deviation from canonical thirds, awkward cantal tilt.
+  // double chin, facial asymmetry, ratio deviation from canonical thirds,
+  // negative/flat cantal tilt. Cantal deviation is heavily boosted because
+  // it's the single biggest "unmoggable" structural cue.
   const structuralUgly = clamp01(
-    0.36 * f.chinCompression +
-    0.26 * f.asymmetry +
-    0.20 * st.ratioDeviation +
-    0.18 * st.cantalDeviation
+    0.34 * f.chinCompression +
+    0.24 * f.asymmetry +
+    0.16 * st.ratioDeviation +
+    0.26 * st.cantalDeviation
   );
 
   // ---- 3. SURFACE UGLINESS — skin + teeth ---------------------------------
-  // dentalSignal already encodes (visibility * yellowTint). Treat raw white
-  // teeth as neutral; only yellow/exposed teeth in a non-smile context add.
   const surfaceUgly = clamp01(
-    0.62 * skinRoughness +
-    0.38 * dentalSignal
+    0.55 * skinRoughness +
+    0.45 * dentalSignal
   );
 
-  // ---- 4. EXPRESSION UGLINESS — grimaces, sneers, NOT smiles --------------
-  // Smiling looks GOOD even when the mouth is wide. Grimaces & contorted
-  // expressions paired with chin compression are what we want to flag.
+  // ---- 4. EXPRESSION UGLINESS — funny faces, weird lips, tongue out ------
+  // Reward contorted / asymmetric / wide-gaping mouths and grimaces. Smiles
+  // are neutralised but no longer give a giant credit. A wide open mouth
+  // with high lip-stretch is a tongue-out / weird-face proxy and counts
+  // even WITHOUT a grimace.
+  const tongueProxy = clamp01(f.teethExposure * 1.1 + f.mouthDistortion * 0.6);
+  const weirdLips = clamp01(f.mouthDistortion * (1 - e.smile * 0.6));
   const grimaceLike = clamp01(
-    0.55 * e.grimace +
-    0.20 * (e.anger * (1 - e.smile)) +
-    0.15 * (f.mouthDistortion * f.chinCompression * 1.6) +  // contorted lower face
-    0.10 * f.eyeChaos
+    0.30 * e.grimace +
+    0.15 * (e.anger * (1 - e.smile)) +
+    0.20 * weirdLips +
+    0.20 * tongueProxy +
+    0.10 * (f.mouthDistortion * f.chinCompression * 1.6) +
+    0.05 * f.eyeChaos
   );
 
-  // ---- 5. BEAUTY CREDIT (subtracted) --------------------------------------
-  // Symmetric, well-proportioned, smiling, smooth-skinned, white-teethed,
-  // facing camera = strong subtraction. Smile is treated as "looking good".
-  const teethWhiteness = clamp01(1 - dentalSignal); // low yellow signal
+  // ---- 5. BEAUTY CREDIT (subtracted, lighter) -----------------------------
+  // Smaller subtraction so genuine ugliness signals can climb high. We do
+  // NOT subtract for hollow cheeks or sharp jaw — those are good looks
+  // and absent from this composite. Smile contribution is reduced so
+  // "funny faces" with smiles still register as chaotic.
+  const teethWhiteness = clamp01(1 - dentalSignal);
   const skinSmoothness = clamp01(1 - skinRoughness);
   const beauty = clamp01(
-    0.30 * st.symmetryIdeal +
+    0.34 * st.symmetryIdeal +
     0.18 * (1 - st.ratioDeviation) +
-    0.14 * (1 - st.cantalDeviation) +
-    0.16 * e.smile +                    // SMILING IS GOOD
+    0.18 * (1 - st.cantalDeviation) +    // POSITIVE cantal tilt = beauty
+    0.08 * e.smile +
     0.10 * skinSmoothness +
     0.08 * teethWhiteness +
-    0.04 * (1 - f.headAngle)            // facing camera
+    0.04 * (1 - f.headAngle)
   );
 
   // ---- 6. COMBINE ---------------------------------------------------------
-  // Ugliness composite — structure dominates, surface + grimace add, audio
-  // is intentionally absent (talking doesn't make you ugly).
   const ugliness = clamp01(
-    0.50 * structuralUgly +
-    0.28 * surfaceUgly +
-    0.22 * grimaceLike
+    0.42 * structuralUgly +
+    0.24 * surfaceUgly +
+    0.34 * grimaceLike
   );
 
-  // Net score: ugliness minus a moderate beauty subtraction. Beauty still
-  // protects symmetric/smiling faces but no longer wipes out genuine
-  // ugliness signals — so double-chins, sneers, asymmetry can climb high.
-  const combined = clamp01(ugliness - 0.38 * beauty);
+  // Lighter beauty subtraction so a real double-chin / sneer / tongue-out
+  // / negative cantal tilt frame can land in the 7–10 zone.
+  const combined = clamp01(ugliness - 0.22 * beauty);
 
-  // Sigmoid tuned so the midpoint of the ugliness range maps to ~5/10.
-  // Lower mid + slightly gentler slope = scores breathe higher overall
-  // while still keeping clean, smiling, symmetric faces below ~3/10.
-  let target01 = sigmoid01(combined, 6.2, 0.32);
+  // Lower midpoint + steeper slope so bad-look frames climb fast while a
+  // clean neutral face still stays under ~3/10.
+  let target01 = sigmoid01(combined, 7.5, 0.26);
 
   // ---- 5. Confidence weighting -------------------------------------------
   const conf = clamp01(confidence);
