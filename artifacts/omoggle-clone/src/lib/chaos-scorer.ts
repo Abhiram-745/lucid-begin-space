@@ -633,13 +633,15 @@ export function scoreFromFeatures(
     0.22 * grimaceLike
   );
 
-  // Net score: ugliness minus a strong beauty subtraction.
-  // Floor at 0; baseline of 0 means "looks fine, nothing flagged".
-  const combined = clamp01(ugliness - 0.55 * beauty);
+  // Net score: ugliness minus a moderate beauty subtraction. Beauty still
+  // protects symmetric/smiling faces but no longer wipes out genuine
+  // ugliness signals — so double-chins, sneers, asymmetry can climb high.
+  const combined = clamp01(ugliness - 0.38 * beauty);
 
-  // Steeper sigmoid centered higher so attractive/neutral faces stay LOW
-  // and only genuinely bad-looking frames climb past ~5/10.
-  let target01 = sigmoid01(combined, 7.0, 0.42);
+  // Sigmoid tuned so the midpoint of the ugliness range maps to ~5/10.
+  // Lower mid + slightly gentler slope = scores breathe higher overall
+  // while still keeping clean, smiling, symmetric faces below ~3/10.
+  let target01 = sigmoid01(combined, 6.2, 0.32);
 
   // ---- 5. Confidence weighting -------------------------------------------
   const conf = clamp01(confidence);

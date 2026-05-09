@@ -29,6 +29,12 @@ export default function LiveArena() {
   // 1. Acquire camera + start matchmaking
   useEffect(() => {
     let cancelled = false;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        "This browser doesn't expose getUserMedia. Open the site over HTTPS in Chrome, Edge, Firefox or Safari.",
+      );
+      return;
+    }
     navigator.mediaDevices
       .getUserMedia({
         video: { facingMode: "user", width: 1280, height: 720 },
@@ -45,7 +51,21 @@ export default function LiveArena() {
         setCameraReady(true);
         await mp.start(stream);
       })
-      .catch(() => setCameraError("Camera access is blocked or unavailable."));
+      .catch((err: unknown) => {
+        const e = err as { name?: string; message?: string };
+        const name = e?.name ?? "";
+        if (name === "NotAllowedError" || name === "SecurityError") {
+          setCameraError(
+            "Camera/mic permission was blocked. Click the camera icon in the address bar, allow access, and reload.",
+          );
+        } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+          setCameraError("No camera/microphone was found on this device.");
+        } else if (name === "NotReadableError") {
+          setCameraError("Your camera is in use by another app. Close it and reload.");
+        } else {
+          setCameraError(e?.message || "Camera access is blocked or unavailable.");
+        }
+      });
 
     return () => {
       cancelled = true;
