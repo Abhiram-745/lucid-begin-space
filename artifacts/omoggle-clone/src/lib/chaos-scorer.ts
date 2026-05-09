@@ -192,6 +192,10 @@ export interface EmotionFeatures {
   confusion: number;    // brow asymmetry + squint
   exaggeration: number; // overall amplitude of expression
   intensity: number;    // composite 0..1
+  /** 0..1 — corners-up smile detector. HIGH when smiling/laughing (= GOOD look). */
+  smile: number;
+  /** 0..1 — corners-down grimace / disgust / sneer (= BAD look). */
+  grimace: number;
 }
 
 export function extractEmotion(lm: Pt[]): EmotionFeatures {
@@ -234,12 +238,28 @@ export function extractEmotion(lm: Pt[]): EmotionFeatures {
     0.3 * norm(eyeOpen, 0.06, 0.22),
   );
 
+  /* Smile vs grimace — corner direction relative to mouth center.
+   * In canonical (y-down) space, corners ABOVE the mouth midline (smaller y)
+   * = corners up = smile. Corners below = grimace. We also require that
+   * BOTH corners agree (symmetry), otherwise it's a sneer (still bad). */
+  const mouthMidY = (p[L.mouthTop].y + p[L.mouthBot].y) / 2;
+  const cornerLY = p[L.mouthLeft].y;
+  const cornerRY = p[L.mouthRight].y;
+  // Negative = corner above midline (smiling); positive = corner below (frown).
+  const cornerLLift = mouthMidY - cornerLY;
+  const cornerRLift = mouthMidY - cornerRY;
+  const cornerLift = (cornerLLift + cornerRLift) / 2;
+  const cornerSym = 1 - clamp01(Math.abs(cornerLLift - cornerRLift) / 0.12);
+  const widening = norm(mouthWide, 0.62, 1.05);
+  const smile = clamp01(norm(cornerLift, 0.005, 0.06) * (0.55 + 0.45 * cornerSym) * (0.6 + 0.4 * widening));
+  const grimace = clamp01(norm(-cornerLift, 0.005, 0.05) * (0.5 + 0.5 * (1 - cornerSym * 0.5)));
+
   const intensity = clamp01(
     Math.max(surprise, anger, confusion, exaggeration) * 0.7 +
     0.3 * (surprise + anger + confusion + exaggeration) / 4,
   );
 
-  return { surprise, anger, confusion, exaggeration, intensity };
+  return { surprise, anger, confusion, exaggeration, intensity, smile, grimace };
 }
 
 /* ---------- structural signals (used INVERSELY — small weight) ---------- */
