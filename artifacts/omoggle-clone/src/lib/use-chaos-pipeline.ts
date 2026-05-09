@@ -60,6 +60,8 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
   const prevScore = useRef(0);
   const rafRef = useRef(0);
   const lastT = useRef(-1);
+  const missFramesRef = useRef(0);
+  const hitFramesRef = useRef(0);
 
   // Set up audio analyser
   const audioCtx = useRef<AudioContext | null>(null);
@@ -110,8 +112,15 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
       try {
         const result = landmarker.detectForVideo(video, performance.now());
         const lm = result.faceLandmarks?.[0];
-        if (lm && lm.length > 400) {
-          setHasFace(true);
+        const detected = !!(lm && lm.length > 400);
+        if (detected) {
+          missFramesRef.current = 0;
+          hitFramesRef.current = Math.min(30, hitFramesRef.current + 1);
+          // Require 3 consecutive hits before declaring face present.
+          if (hitFramesRef.current >= 3) setHasFace(true);
+
+          // Confidence ramps up with stable detections (warm-up ~6 frames).
+          const confidence = Math.min(1, hitFramesRef.current / 6);
           const spatial = extractSpatial(lm as any);
           const emotion = extractEmotion(lm as any);
           const structure = extractStructure(lm as any);
@@ -129,13 +138,37 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
             );
           }
 
-          const b = scoreFromFeatures(spatial, temp, audio, undefined, prevScore.current, emotion, structure);
+          const b = scoreFromFeatures(
+            spatial, temp, audio, undefined, prevScore.current, emotion, structure,
+            0, 0, confidence,
+          );
           prevScore.current = b.score;
           setBreakdown(b);
           setOppMouthProxy(spatial.mouthDistortion);
           onTick?.(b);
         } else {
-          setHasFace(false);
+          hitFramesRef.current = 0;
+          missFramesRef.current = Math.min(60, missFramesRef.current + 1);
+          // Require 6 consecutive misses (~200ms) before clearing face state,
+          // so brief tracker hiccups don't blank the HUD.
+          if (missFramesRef.current >= 6) {
+            setHasFace(false);
+            // Reset score + temporal so resumed detection starts fresh.
+            prevScore.current = 0;
+            temporal.current.reset();
+            // Emit a no-face breakdown so consumers can show the empty state.
+            const empty = scoreFromFeatures(
+              { asymmetry: 0, mouthDistortion: 0, teethExposure: 0, eyeChaos: 0, chinCompression: 0, headAngle: 0, raw: { asymmetryPct: 0, mouthOpenRatio: 0, teethExposure: 0, chinCompression: 0, headTiltDeg: 0 } },
+              { expressionVolatility: 0, motionInstability: 0, commitment: 0, momentum: 0, peak: 0 },
+              { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 },
+              undefined, 0,
+              { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0, genuineSmile: 0, weirdSmile: 0, tongueOut: 0 },
+              { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
+              0, 0, 0,
+            );
+            setBreakdown(empty);
+            onTick?.(empty);
+          }
         }
       } catch {
         // mediapipe occasionally throws on un-warmed frames
