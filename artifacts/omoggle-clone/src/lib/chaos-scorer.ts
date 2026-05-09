@@ -525,6 +525,13 @@ export interface ChaosBreakdown {
     performance: "IDLE" | "ACTIVE" | "INTENSE" | "EXTREME";
     deviation: number;       // facial deviation %
   };
+  /** TRUE when no face is reliably detected → score is 0 and HUD should grey out. */
+  noFace: boolean;
+  /** Top contributors to the *current* score, for the live HUD. */
+  traits: {
+    good: Array<{ label: string; v: number }>; // why score is LOW (aesthetic)
+    bad: Array<{ label: string; v: number }>;  // why score is HIGH (chaos)
+  };
   score: number; // 0..10
 }
 
@@ -576,6 +583,16 @@ export function scoreFromFeatures(
   /** 0..1 — multiplied into the final score. Low = no face / unstable. */
   confidence = 1,
 ): ChaosBreakdown {
+  // ---- Confidence gate: no face → return zeroed, neutral breakdown -------
+  const conf0 = clamp01(confidence);
+  if (conf0 < 0.2) {
+    return {
+      spatial: s, temporal: t, audio: a, emotion: e, structure: st,
+      chaosEnergy: 0, score: 0, noFace: true,
+      traits: { good: [], bad: [] },
+      readouts: { chaosEnergy: "DORMANT", emotion: "NEUTRAL", performance: "IDLE", deviation: 0 },
+    };
+  }
   // ============================================================
   // UNMOG SCORING v2 — REVERSED LOOKSMAXX MODEL
   // ------------------------------------------------------------
@@ -589,7 +606,7 @@ export function scoreFromFeatures(
   // ============================================================
 
   // ---- 0. Confidence gating ---------------------------------------------
-  const conf = clamp01(confidence);
+  const conf = conf0;
 
   // ---- 1. Dead-zoned channels (kill micro-jitter) -----------------------
   const dz = (v: number, th = 0.06) => deadzone(v, th);
@@ -599,11 +616,13 @@ export function scoreFromFeatures(
   // (so a happy face doesn't accidentally count as ugly).
   const genuineVeto = clamp01(1 - e.genuineSmile * 1.4);
   const distortionRaw =
-    0.42 * s.mouthDistortion * genuineVeto +
-    0.22 * e.tongueOut +
-    0.16 * e.weirdSmile +
+    0.34 * s.mouthDistortion * genuineVeto +
+    0.20 * e.tongueOut +
+    0.14 * e.weirdSmile +
     0.12 * e.grimace +
-    0.08 * s.teethExposure * genuineVeto;
+    0.08 * s.teethExposure * genuineVeto +
+    // emotional performance — anger / surprise / exaggeration push score UP
+    0.12 * Math.max(e.anger, e.surprise, e.exaggeration) * genuineVeto;
   const distortion = dz(clamp01(distortionRaw), 0.08);
 
   const eyeChaos      = dz(s.eyeChaos, 0.08);
@@ -619,13 +638,22 @@ export function scoreFromFeatures(
   const cantalDeviation = dz(st.cantalDeviation, 0.06);
 
   // ---- 2. PERFORMANCE BLOCK (75%) ---------------------------------------
+  // Silly-face emotional bonus — anger/surprise/confusion all increase score.
+  const emoBonus = clamp01(
+    0.45 * e.anger +
+    0.30 * e.surprise +
+    0.25 * e.confusion +
+    0.30 * e.exaggeration,
+  ) * genuineVeto;
+
   const performance =
-    0.24 * distortion +
-    0.16 * eyeChaos +
-    0.22 * chin +
-    0.12 * motion +
-    0.10 * volatility +
-    0.16 * commitment;
+    0.22 * distortion +
+    0.15 * eyeChaos +
+    0.20 * chin +
+    0.10 * motion +
+    0.09 * volatility +
+    0.12 * commitment +
+    0.16 * dz(emoBonus, 0.08);
 
   // ---- 3. STRUCTURAL DEVIATION (25%) ------------------------------------
   const structural =
@@ -699,9 +727,36 @@ export function scoreFromFeatures(
   const perfLabel: ChaosBreakdown["readouts"]["performance"] =
     score > 8.5 ? "EXTREME" : score > 6.5 ? "INTENSE" : score > 3.5 ? "ACTIVE" : "IDLE";
 
+  // ---- TRAITS: which channels drive the current score -------------------
+  const badChannels: Array<{ label: string; v: number }> = [
+    { label: "Mouth distortion",  v: s.mouthDistortion },
+    { label: "Tongue / gape",     v: e.tongueOut },
+    { label: "Asymmetric smirk",  v: e.weirdSmile },
+    { label: "Grimace",           v: e.grimace },
+    { label: "Eye chaos",         v: s.eyeChaos },
+    { label: "Chin compression",  v: s.chinCompression },
+    { label: "Anger",             v: e.anger },
+    { label: "Surprise",          v: e.surprise },
+    { label: "Head angle",        v: s.headAngle },
+    { label: "Motion instability",v: t.motionInstability },
+    { label: "Asymmetry",         v: s.asymmetry },
+    { label: "Cantal deviation",  v: st.cantalDeviation },
+  ].filter((x) => x.v > 0.18).sort((x, y) => y.v - x.v).slice(0, 3);
+
+  const goodChannels: Array<{ label: string; v: number }> = [
+    { label: "Facial symmetry",     v: st.symmetryIdeal },
+    { label: "Ideal proportions",   v: 1 - st.ratioDeviation },
+    { label: "Positive cantal tilt",v: 1 - st.cantalDeviation },
+    { label: "Genuine smile",       v: e.genuineSmile },
+    { label: "Composed expression", v: 1 - clamp01(s.mouthDistortion + e.weirdSmile + e.grimace) },
+    { label: "Steady head",         v: 1 - s.headAngle },
+    { label: "Calm eyes",           v: 1 - s.eyeChaos },
+  ].filter((x) => x.v > 0.55).sort((x, y) => y.v - x.v).slice(0, 3);
+
   return {
     spatial: s, temporal: t, audio: a, emotion: e, structure: st,
-    chaosEnergy, score,
+    chaosEnergy, score, noFace: false,
+    traits: { good: goodChannels, bad: badChannels },
     readouts: {
       chaosEnergy: chaosLabel,
       emotion: emotionLabel,
