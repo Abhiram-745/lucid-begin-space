@@ -6,6 +6,15 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Required so getUserMedia() (camera + mic permission popup) is allowed
+# on the deployed site. Without an explicit policy some browsers / embedders
+# silently block the prompt from ever appearing.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self), microphone=(self), autoplay=(self), display-capture=(self)"
+    Feature-Policy = "camera 'self'; microphone 'self'; autoplay 'self'"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
