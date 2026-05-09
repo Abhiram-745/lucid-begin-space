@@ -155,10 +155,13 @@ export function extractSpatial(lm: Pt[]): SpatialFeatures {
   const lowerFaceSpan = Math.abs(p[L.chin].y - p[L.mouthBot].y);
   const jawToChinSpan = Math.abs(p[L.chin].y - jawMid.y);
   const faceSquash = clamp01(norm(1.92 - verticalSpan, 0, 0.55));
+  // NOTE: do NOT include jawToChinSpan — a sharp/defined jaw makes that
+  // distance small and would falsely register as "double chin". Real chin
+  // compression shows up as the lower-face span collapsing toward the
+  // mouth, plus overall vertical face squash from a tucked head.
   const chinCompression = clamp01(
-    0.45 * norm(0.62 - lowerFaceSpan, 0, 0.34) +
-    0.35 * norm(0.50 - jawToChinSpan, 0, 0.28) +
-    0.20 * faceSquash,
+    0.65 * norm(0.62 - lowerFaceSpan, 0, 0.34) +
+    0.35 * faceSquash,
   );
 
   /* head angle — original (pre-normalization) roll + yaw proxy */
@@ -598,20 +601,23 @@ export function scoreFromFeatures(
   );
 
   // ---- 4. EXPRESSION UGLINESS — funny faces, weird lips, tongue out ------
-  // Reward contorted / asymmetric / wide-gaping mouths and grimaces. Smiles
-  // are neutralised but no longer give a giant credit. A wide open mouth
-  // with high lip-stretch is a tongue-out / weird-face proxy and counts
-  // even WITHOUT a grimace.
-  const tongueProxy = clamp01(f.teethExposure * 1.1 + f.mouthDistortion * 0.6);
-  const weirdLips = clamp01(f.mouthDistortion * (1 - e.smile * 0.6));
-  const grimaceLike = clamp01(
-    0.30 * e.grimace +
-    0.15 * (e.anger * (1 - e.smile)) +
-    0.20 * weirdLips +
-    0.20 * tongueProxy +
-    0.10 * (f.mouthDistortion * f.chinCompression * 1.6) +
-    0.05 * f.eyeChaos
+  // CRITICAL: a smile also shows teeth and stretches the mouth, so we MUST
+  // veto the teeth/mouth-distortion channels when a smile is detected,
+  // otherwise a happy face gets scored as ugly. Only count exposed teeth
+  // / wide mouth as "ugly" when there's no smile.
+  const smileVeto = clamp01(1 - e.smile * 1.4);          // smile≈0.7 → veto
+  const grimaceGate = clamp01(e.grimace * 1.3 + (1 - e.smile));
+  const tongueProxy = clamp01(
+    (f.teethExposure * 1.1 + f.mouthDistortion * 0.6) * smileVeto
   );
+  const weirdLips = clamp01(f.mouthDistortion * smileVeto);
+  const grimaceLike = clamp01(
+    0.34 * e.grimace +
+    0.18 * (e.anger * (1 - e.smile)) +
+    0.22 * weirdLips +
+    0.18 * tongueProxy +
+    0.08 * (f.mouthDistortion * f.chinCompression * 1.6 * smileVeto)
+  ) * grimaceGate;
 
   // ---- 5. BEAUTY CREDIT (subtracted, lighter) -----------------------------
   // Smaller subtraction so genuine ugliness signals can climb high. We do
@@ -621,12 +627,12 @@ export function scoreFromFeatures(
   const teethWhiteness = clamp01(1 - dentalSignal);
   const skinSmoothness = clamp01(1 - skinRoughness);
   const beauty = clamp01(
-    0.34 * st.symmetryIdeal +
-    0.18 * (1 - st.ratioDeviation) +
+    0.28 * st.symmetryIdeal +
+    0.16 * (1 - st.ratioDeviation) +
     0.18 * (1 - st.cantalDeviation) +    // POSITIVE cantal tilt = beauty
-    0.08 * e.smile +
-    0.10 * skinSmoothness +
-    0.08 * teethWhiteness +
+    0.20 * e.smile +                     // smiling is a clear "good look" signal
+    0.08 * skinSmoothness +
+    0.06 * teethWhiteness +
     0.04 * (1 - f.headAngle)
   );
 
@@ -639,7 +645,9 @@ export function scoreFromFeatures(
 
   // Lighter beauty subtraction so a real double-chin / sneer / tongue-out
   // / negative cantal tilt frame can land in the 7–10 zone.
-  const combined = clamp01(ugliness - 0.22 * beauty);
+  // Stronger beauty subtraction so a clean, smiling, symmetric face lands LOW
+  // even if a few low-level signals are noisy.
+  const combined = clamp01(ugliness - 0.55 * beauty);
 
   // Lower midpoint + steeper slope so bad-look frames climb fast while a
   // clean neutral face still stays under ~3/10.
