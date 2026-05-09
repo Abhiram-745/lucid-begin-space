@@ -627,12 +627,12 @@ export function scoreFromFeatures(
   const teethWhiteness = clamp01(1 - dentalSignal);
   const skinSmoothness = clamp01(1 - skinRoughness);
   const beauty = clamp01(
-    0.34 * st.symmetryIdeal +
-    0.18 * (1 - st.ratioDeviation) +
+    0.28 * st.symmetryIdeal +
+    0.16 * (1 - st.ratioDeviation) +
     0.18 * (1 - st.cantalDeviation) +    // POSITIVE cantal tilt = beauty
-    0.08 * e.smile +
-    0.10 * skinSmoothness +
-    0.08 * teethWhiteness +
+    0.20 * e.smile +                     // smiling is a clear "good look" signal
+    0.08 * skinSmoothness +
+    0.06 * teethWhiteness +
     0.04 * (1 - f.headAngle)
   );
 
@@ -645,7 +645,9 @@ export function scoreFromFeatures(
 
   // Lighter beauty subtraction so a real double-chin / sneer / tongue-out
   // / negative cantal tilt frame can land in the 7–10 zone.
-  const combined = clamp01(ugliness - 0.22 * beauty);
+  // Stronger beauty subtraction so a clean, smiling, symmetric face lands LOW
+  // even if a few low-level signals are noisy.
+  const combined = clamp01(ugliness - 0.55 * beauty);
 
   // Lower midpoint + steeper slope so bad-look frames climb fast while a
   // clean neutral face still stays under ~3/10.
