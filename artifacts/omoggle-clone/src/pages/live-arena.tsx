@@ -86,9 +86,28 @@ export default function LiveArena() {
     }
   }, [mp.remoteStream]);
 
-  // 3. Round timer (only when live)
+  // 3a. Pre-round countdown when both peers are connected
   useEffect(() => {
-    if (mp.status !== "live" || winner) return;
+    if (mp.status !== "live" || matchStarted || winner) return;
+    if (!mp.remoteStream) return;
+    setCountdown(3);
+    const id = window.setInterval(() => {
+      setCountdown((c) => {
+        if (c === null) return null;
+        if (c <= 1) {
+          window.clearInterval(id);
+          setMatchStarted(true);
+          return null;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [mp.status, mp.remoteStream, matchStarted, winner]);
+
+  // 3b. Round timer (only after countdown)
+  useEffect(() => {
+    if (!matchStarted || winner) return;
     const tick = window.setInterval(() => {
       setRoundLeft((s) => {
         if (s <= 1) {
@@ -100,7 +119,7 @@ export default function LiveArena() {
       });
     }, 1000);
     return () => window.clearInterval(tick);
-  }, [mp.status, winner, peakLocal, mp.opponentPeak]);
+  }, [matchStarted, winner, peakLocal, mp.opponentPeak]);
 
   // 4. Opponent forfeit
   useEffect(() => {
@@ -113,8 +132,9 @@ export default function LiveArena() {
   // 5. Pipeline tick → score broadcast + event detection + peak tracking
   useEffect(() => {
     if (!pipeline.breakdown) return;
-    setPeakLocal((p) => Math.max(p, pipeline.breakdown!.score));
-    if (mp.status === "live") mp.broadcastScore(pipeline.breakdown.score);
+    const sc = pipeline.hasFace ? pipeline.breakdown.score : 0;
+    if (matchStarted) setPeakLocal((p) => Math.max(p, sc));
+    if (mp.status === "live") mp.broadcastScore(sc);
 
     const audioSpike = pipeline.breakdown.audio.spike;
     const oppMouthProxy = Math.min(1, mp.opponentScore / 10);
@@ -148,6 +168,8 @@ export default function LiveArena() {
     setWinner(null);
     setPeakLocal(0);
     setRoundLeft(ROUND_SECONDS);
+    setMatchStarted(false);
+    setCountdown(null);
     mp.leave();
     if (streamRef.current) mp.start(streamRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
