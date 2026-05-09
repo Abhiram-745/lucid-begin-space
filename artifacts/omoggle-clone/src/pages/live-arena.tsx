@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, OctagonX, Radar, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi } from "lucide-react";
+import { ChevronLeft, OctagonX, Radar, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi, Check, X } from "lucide-react";
 import { useChaosPipeline } from "@/lib/use-chaos-pipeline";
 import { EventDetector, type InstantEvent } from "@/lib/instant-win";
 import { useMultiplayer } from "@/lib/use-multiplayer";
@@ -19,12 +19,15 @@ export default function LiveArena() {
   const [peakLocal, setPeakLocal] = useState(0);
   const [events, setEvents] = useState<InstantEvent[]>([]);
   const [winner, setWinner] = useState<"you" | "opp" | "draw" | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [matchStarted, setMatchStarted] = useState(false);
 
   const detector = useRef(new EventDetector());
   const mp = useMultiplayer();
 
   const pipeline = useChaosPipeline({ videoRef: localVideoRef, audioStream });
-  const localScore = pipeline.breakdown?.score ?? 0;
+  const localScore = pipeline.hasFace ? pipeline.breakdown?.score ?? 0 : 0;
+  const traits = pipeline.breakdown?.traits ?? { good: [], bad: [] };
 
   // 1. Acquire camera + start matchmaking
   useEffect(() => {
