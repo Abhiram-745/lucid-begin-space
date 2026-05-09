@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "cd ../.. && corepack pnpm install --frozen-lockfile --ignore-scripts",
+  "buildCommand": "BASE_PATH=/ PORT=3000 corepack pnpm --filter @workspace/omoggle-clone run build",
+  "outputDirectory": "dist/public",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
