@@ -199,6 +199,12 @@ export interface EmotionFeatures {
   smile: number;
   /** 0..1 — corners-down grimace / disgust / sneer (= BAD look). */
   grimace: number;
+  /** 0..1 — only fires for symmetric, balanced, "real" smiles. */
+  genuineSmile: number;
+  /** 0..1 — asymmetric / lopsided / smirk smile. Counts as WEIRD, not good. */
+  weirdSmile: number;
+  /** 0..1 — mouth wide+open with corners NOT up (tongue-out / gape). */
+  tongueOut: number;
 }
 
 export function extractEmotion(lm: Pt[]): EmotionFeatures {
@@ -254,15 +260,26 @@ export function extractEmotion(lm: Pt[]): EmotionFeatures {
   const cornerLift = (cornerLLift + cornerRLift) / 2;
   const cornerSym = 1 - clamp01(Math.abs(cornerLLift - cornerRLift) / 0.12);
   const widening = norm(mouthWide, 0.62, 1.05);
-  const smile = clamp01(norm(cornerLift, 0.005, 0.06) * (0.55 + 0.45 * cornerSym) * (0.6 + 0.4 * widening));
+  const smileRaw = norm(cornerLift, 0.005, 0.06);
+  const smile = clamp01(smileRaw * (0.55 + 0.45 * cornerSym) * (0.6 + 0.4 * widening));
+  // Genuine smile = corners up AND symmetric. Lopsided "smiles" don't count.
+  const genuineSmile = clamp01(smileRaw * cornerSym * cornerSym * (0.5 + 0.5 * widening));
+  // Weird smile = corners up but asymmetric (smirk / sneer-smile).
+  const weirdSmile = clamp01(smileRaw * (1 - cornerSym) * 1.4);
   const grimace = clamp01(norm(-cornerLift, 0.005, 0.05) * (0.5 + 0.5 * (1 - cornerSym * 0.5)));
+  // Tongue-out / gape: mouth very open AND wide, but corners NOT lifted.
+  const mouthOpenness = norm(mouthOpen, 0.06, 0.42);
+  const mouthWideness = norm(mouthWide, 0.62, 1.05);
+  const tongueOut = clamp01(
+    mouthOpenness * (0.5 + 0.5 * mouthWideness) * (1 - smileRaw * 0.7),
+  );
 
   const intensity = clamp01(
     Math.max(surprise, anger, confusion, exaggeration) * 0.7 +
     0.3 * (surprise + anger + confusion + exaggeration) / 4,
   );
 
-  return { surprise, anger, confusion, exaggeration, intensity, smile, grimace };
+  return { surprise, anger, confusion, exaggeration, intensity, smile, grimace, genuineSmile, weirdSmile, tongueOut };
 }
 
 /* ---------- structural signals (used INVERSELY — small weight) ---------- */
@@ -556,7 +573,7 @@ export function scoreFromFeatures(
   a: AudioFeatures,
   w: Weights = DEFAULT_WEIGHTS,
   prevScore = 0,
-  e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0 },
+  e: EmotionFeatures = { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0, genuineSmile: 0, weirdSmile: 0, tongueOut: 0 },
   st: StructureFeatures = { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
   skinRoughness = 0,
   dentalSignal = 0,
@@ -605,18 +622,22 @@ export function scoreFromFeatures(
   // veto the teeth/mouth-distortion channels when a smile is detected,
   // otherwise a happy face gets scored as ugly. Only count exposed teeth
   // / wide mouth as "ugly" when there's no smile.
-  const smileVeto = clamp01(1 - e.smile * 1.4);          // smile≈0.7 → veto
-  const grimaceGate = clamp01(e.grimace * 1.3 + (1 - e.smile));
-  const tongueProxy = clamp01(
-    (f.teethExposure * 1.1 + f.mouthDistortion * 0.6) * smileVeto
-  );
-  const weirdLips = clamp01(f.mouthDistortion * smileVeto);
+  // Veto ONLY for genuine, symmetric smiles. Weird/lopsided smiles or
+  // smile-with-tongue-out should still score as ugly.
+  const genuineVeto = clamp01(1 - e.genuineSmile * 1.5);   // genuine≈0.66 → full veto
+  const grimaceGate = clamp01(e.grimace * 1.3 + (1 - e.genuineSmile));
+  // Tongue-out is its OWN signal now — never vetoed by smile.
+  const tongueChannel = clamp01(e.tongueOut * 1.2);
+  const teethChannel = clamp01(f.teethExposure * genuineVeto);
+  const weirdLips = clamp01(f.mouthDistortion * genuineVeto);
   const grimaceLike = clamp01(
-    0.34 * e.grimace +
-    0.18 * (e.anger * (1 - e.smile)) +
-    0.22 * weirdLips +
-    0.18 * tongueProxy +
-    0.08 * (f.mouthDistortion * f.chinCompression * 1.6 * smileVeto)
+    0.26 * e.grimace +
+    0.14 * (e.anger * (1 - e.genuineSmile)) +
+    0.18 * weirdLips +
+    0.16 * teethChannel +
+    0.20 * tongueChannel +
+    0.12 * e.weirdSmile +
+    0.06 * (f.mouthDistortion * f.chinCompression * 1.6 * genuineVeto)
   ) * grimaceGate;
 
   // ---- 5. BEAUTY CREDIT (subtracted, lighter) -----------------------------
@@ -626,11 +647,17 @@ export function scoreFromFeatures(
   // "funny faces" with smiles still register as chaotic.
   const teethWhiteness = clamp01(1 - dentalSignal);
   const skinSmoothness = clamp01(1 - skinRoughness);
+  // A clean, well-proportioned RESTING face should already score low — we
+  // don't need a smile to bring the score down. So the beauty credit weighs
+  // structural goodness (symmetry, ratios, positive cantal tilt, smooth
+  // skin, low expression amplitude) over smiling.
+  const restingComposure = clamp01(1 - Math.max(f.mouthDistortion, f.eyeChaos, e.exaggeration));
   const beauty = clamp01(
-    0.28 * st.symmetryIdeal +
+    0.26 * st.symmetryIdeal +
     0.16 * (1 - st.ratioDeviation) +
-    0.18 * (1 - st.cantalDeviation) +    // POSITIVE cantal tilt = beauty
-    0.20 * e.smile +                     // smiling is a clear "good look" signal
+    0.20 * (1 - st.cantalDeviation) +
+    0.10 * e.genuineSmile +              // only genuine smiles are "good"
+    0.10 * restingComposure +            // calm neutral face = good look
     0.08 * skinSmoothness +
     0.06 * teethWhiteness +
     0.04 * (1 - f.headAngle)
@@ -638,20 +665,21 @@ export function scoreFromFeatures(
 
   // ---- 6. COMBINE ---------------------------------------------------------
   const ugliness = clamp01(
-    0.42 * structuralUgly +
-    0.24 * surfaceUgly +
-    0.34 * grimaceLike
+    0.40 * structuralUgly +
+    0.20 * surfaceUgly +
+    0.40 * grimaceLike
   );
 
   // Lighter beauty subtraction so a real double-chin / sneer / tongue-out
   // / negative cantal tilt frame can land in the 7–10 zone.
   // Stronger beauty subtraction so a clean, smiling, symmetric face lands LOW
   // even if a few low-level signals are noisy.
-  const combined = clamp01(ugliness - 0.55 * beauty);
+  const combined = clamp01(ugliness - 0.50 * beauty);
 
   // Lower midpoint + steeper slope so bad-look frames climb fast while a
-  // clean neutral face still stays under ~3/10.
-  let target01 = sigmoid01(combined, 7.5, 0.26);
+  // clean neutral face still stays under ~3/10. Slight push so silly faces
+  // can reach the 8–10 zone more easily.
+  let target01 = sigmoid01(combined, 8.0, 0.24);
 
   // ---- 5. Confidence weighting -------------------------------------------
   const conf = clamp01(confidence);
@@ -659,7 +687,37 @@ export function scoreFromFeatures(
 
   const targetScore = target01 * 10;
 
-  // ---- 6. Temporal stability — ASYMMETRIC EMA ----------------------------
+  // ---- 6. Temporal stability — ASYMMETRIC EMA + DEAD-BAND ----------------
+  // Dead-band: if the new target is within ±0.35 of the previous score, hold
+  // the previous value. Kills the constant micro-fluctuations while a still
+  // face is in front of the camera.
+  if (Math.abs(targetScore - prevScore) < 0.35) {
+    const score = prevScore;
+    const chaosEnergy = clamp01(
+      0.35 * t.motionInstability +
+      0.30 * t.expressionVolatility +
+      0.20 * a.energy +
+      0.15 * a.spike,
+    );
+    const chaosLabel: ChaosBreakdown["readouts"]["chaosEnergy"] =
+      chaosEnergy > 0.78 ? "EXTREME" : chaosEnergy > 0.55 ? "HIGH" : chaosEnergy > 0.30 ? "RISING" : "DORMANT";
+    const emotionsHold: Array<[ChaosBreakdown["readouts"]["emotion"], number]> = [
+      ["SURPRISE", e.surprise], ["ANGER", e.anger],
+      ["CONFUSION", e.confusion], ["EXAGGERATED", e.exaggeration],
+    ];
+    emotionsHold.sort((x, y) => y[1] - x[1]);
+    const emotionLabel = emotionsHold[0][1] > 0.45 ? emotionsHold[0][0] : "NEUTRAL";
+    const perfLabel: ChaosBreakdown["readouts"]["performance"] =
+      score > 8.5 ? "EXTREME" : score > 6.5 ? "INTENSE" : score > 3.5 ? "ACTIVE" : "IDLE";
+    return {
+      spatial: s, temporal: t, audio: a, emotion: e, structure: st,
+      chaosEnergy, score,
+      readouts: {
+        chaosEnergy: chaosLabel, emotion: emotionLabel, performance: perfLabel,
+        deviation: Math.round(st.inversion * 100),
+      },
+    };
+  }
   // Climbing into a high score should feel earned (slow ramp), but once the
   // face relaxes the readout MUST return to baseline immediately — otherwise
   // it looks like the scorer is hallucinating ugliness that isn't there.
