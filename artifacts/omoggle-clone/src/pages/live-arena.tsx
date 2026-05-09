@@ -185,27 +185,50 @@ export default function LiveArena() {
   }
 
   // ================== Live screen ==================
+  // Tug-of-war bar: 50 = even, fills toward higher score.
+  const diff = localScore - mp.opponentScore; // -10..+10
+  const tugPct = Math.max(0, Math.min(100, 50 + (diff / 10) * 50));
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-black font-mono text-white">
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(7,20,27,0.82),rgba(7,7,10,1)_42%,rgba(19,9,22,0.95))]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_28%),radial-gradient(circle_at_80%_72%,rgba(168,85,247,0.14),transparent_30%)]" />
 
-      <header className="relative z-20 flex h-16 items-center justify-between border-b border-white/10 bg-black/45 px-4 backdrop-blur-md sm:px-8">
+      <header className="relative z-20 flex h-12 items-center justify-between border-b border-white/10 bg-black/45 px-3 backdrop-blur-md sm:h-14 sm:px-6">
         <Link href="/arena" className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/55 hover:text-white">
-          <ChevronLeft className="h-4 w-4" /> Leave Match
+          <ChevronLeft className="h-4 w-4" /><span className="hidden sm:inline">Leave</span>
         </Link>
-        <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.24em] text-white">
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.24em] text-white">
           <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
-          1v1 Live · {roundLeft}s
+          1v1 · {matchStarted ? `${roundLeft}s` : "READY"}
         </div>
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-cyan-100">
           <Wifi className="h-4 w-4" /> {mp.isPlayerA ? "Host" : "Peer"}
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1400px] flex-col gap-5 px-4 py-5 sm:px-6">
-        <section className="grid flex-1 gap-5 lg:grid-cols-[1fr_1fr_320px]">
-          {/* Local video */}
+      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-[1400px] flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-3">
+        {/* Tug-of-war bar */}
+        <div className="rounded-[14px] border border-white/10 bg-black/40 px-3 py-2 backdrop-blur">
+          <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em]">
+            <span className="text-emerald-300">You {localScore.toFixed(1)}</span>
+            <span className="text-white/40">{matchStarted ? "MOG WAR" : countdown !== null ? `STARTS IN ${countdown}` : "WAITING"}</span>
+            <span className="text-violet-300">Opp {mp.opponentScore.toFixed(1)}</span>
+          </div>
+          <div className="relative h-2.5 overflow-hidden rounded-full bg-white/10">
+            <div className="absolute left-1/2 top-0 z-10 h-full w-px -translate-x-1/2 bg-white/40" />
+            {tugPct >= 50 ? (
+              <div className="absolute left-1/2 top-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-300 transition-all" style={{ width: `${tugPct - 50}%` }} />
+            ) : (
+              <div className="absolute right-1/2 top-0 h-full bg-gradient-to-l from-violet-400 to-fuchsia-400 transition-all" style={{ width: `${50 - tugPct}%` }} />
+            )}
+          </div>
+          <div className="mt-1 text-center text-[9px] font-black uppercase tracking-[0.2em] text-white/35">
+            Peak You {peakLocal.toFixed(1)} · Peak Opp {mp.opponentPeak.toFixed(1)}
+          </div>
+        </div>
+
+        <section className="grid flex-1 gap-3 sm:gap-4 lg:grid-cols-2">
           <VideoTile
             videoRef={localVideoRef}
             label="You"
@@ -213,8 +236,9 @@ export default function LiveArena() {
             color="emerald"
             mirror
             badges={events.filter((e) => e.type !== "no_face").slice(-2)}
+            noFace={!pipeline.hasFace}
+            traits={traits}
           />
-          {/* Remote video */}
           <VideoTile
             videoRef={remoteVideoRef}
             label="Opponent"
@@ -223,36 +247,6 @@ export default function LiveArena() {
             badges={[]}
             empty={!mp.remoteStream}
           />
-
-          {/* Telemetry */}
-          <aside className="rounded-[24px] border border-white/12 bg-white/[0.045] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.32)] backdrop-blur-md">
-            <div className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-200">UNMOG Telemetry</div>
-            <div className="mt-3 text-4xl font-black tracking-[-0.04em] text-white">
-              {localScore.toFixed(2)}
-              <span className="text-base text-white/40"> / 10</span>
-            </div>
-            <div className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Peak {peakLocal.toFixed(2)} · Opp {mp.opponentPeak.toFixed(2)}</div>
-
-            <div className="mt-6 grid gap-2">
-              <FeatureRow label="Asymmetry" v={pipeline.breakdown?.spatial.asymmetry ?? 0} />
-              <FeatureRow label="Mouth"     v={pipeline.breakdown?.spatial.mouthDistortion ?? 0} />
-              <FeatureRow label="Eye Chaos" v={pipeline.breakdown?.spatial.eyeChaos ?? 0} />
-              <FeatureRow label="Chin"      v={pipeline.breakdown?.spatial.chinCompression ?? 0} />
-              <FeatureRow label="Head"      v={pipeline.breakdown?.spatial.headAngle ?? 0} />
-              <FeatureRow label="Motion"    v={pipeline.breakdown?.temporal.motionInstability ?? 0} />
-              <FeatureRow label="Volat."    v={pipeline.breakdown?.temporal.expressionVolatility ?? 0} />
-              <FeatureRow label="Commit"    v={pipeline.breakdown?.temporal.commitment ?? 0} />
-              <FeatureRow label="Audio"     v={pipeline.breakdown?.audio.energy ?? 0} />
-              <FeatureRow label="Pitch Δ"   v={pipeline.breakdown?.audio.pitchVariation ?? 0} />
-            </div>
-
-            <div className="mt-5 flex items-center justify-between rounded-[14px] border border-white/10 bg-black/35 px-3 py-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Face</span>
-              <span className={`text-xs font-black uppercase tracking-[0.16em] ${pipeline.hasFace ? "text-emerald-300" : "text-red-300"}`}>
-                {pipeline.hasFace ? "Locked" : "Searching"}
-              </span>
-            </div>
-          </aside>
         </section>
 
         {/* Event banner row */}
@@ -424,19 +418,6 @@ function VideoTile({
       <div className="pointer-events-none absolute inset-x-0 top-1/3 flex flex-col items-center gap-2">
         {badges.map((e, i) => <EventBadge key={`${e.type}-${i}`} ev={e} />)}
       </div>
-    </div>
-  );
-}
-
-function FeatureRow({ label, v }: { label: string; v: number }) {
-  const pct = Math.max(0, Math.min(100, v * 100));
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-20 shrink-0 text-[9px] font-black uppercase tracking-[0.18em] text-white/45">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
-        <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-violet-300" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="w-7 text-right text-[9px] font-black tabular-nums text-white/55">{v.toFixed(2)}</span>
     </div>
   );
 }
