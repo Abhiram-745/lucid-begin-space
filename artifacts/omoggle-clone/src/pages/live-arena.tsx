@@ -238,6 +238,18 @@ export default function LiveArena() {
         )}
       </main>
 
+      {/* Countdown overlay */}
+      {countdown !== null && !winner && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="text-center">
+            <div className="text-[11px] font-black uppercase tracking-[0.4em] text-cyan-200">Get Ready</div>
+            <div className="mt-2 text-[140px] font-black leading-none tracking-[-0.08em] text-white drop-shadow-[0_0_40px_rgba(34,211,238,0.5)]">
+              {countdown}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Win overlay */}
       {winner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md">
