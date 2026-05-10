@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, OctagonX, Radar, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi, Check, X, Hexagon } from "lucide-react";
+import { ChevronLeft, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi, Check, X, Hexagon } from "lucide-react";
 import { useChaosPipeline } from "@/lib/use-chaos-pipeline";
 import { EventDetector, type InstantEvent } from "@/lib/instant-win";
 import { useMultiplayer } from "@/lib/use-multiplayer";
