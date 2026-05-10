@@ -1,6 +1,6 @@
 import { ChevronLeft, Info } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -76,6 +76,21 @@ const TIERS = [
 
 export default function Leaderboard() {
   const [activeTab, setActiveTab] = useState<"global" | "season">("global");
+  const [countdown, setCountdown] = useState(() => {
+    const target = Date.now() + 21 * 86400_000 + 11 * 3600_000 + 8 * 60_000 + 53_000;
+    return target;
+  });
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remaining = Math.max(0, countdown - Date.now());
+  const days = Math.floor(remaining / 86400_000);
+  const hours = Math.floor((remaining % 86400_000) / 3600_000);
+  const mins = Math.floor((remaining % 3600_000) / 60_000);
+  const secs = Math.floor((remaining % 60_000) / 1000);
+  void tick;
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -89,12 +104,34 @@ export default function Leaderboard() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#050505] p-4 sm:p-8 flex flex-col items-center font-mono">
       <div className="w-full max-w-[min(1152px,92vw)] min-w-0">
-        <div className="flex items-center justify-between mb-8 mt-4">
+        <div className="relative flex items-center justify-between mb-6 mt-2">
           <button
             onClick={handleBack}
             className="flex items-center gap-2 text-white/50 hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" /> Back to Arena
+          </button>
+        </div>
+
+        {/* Season countdown card */}
+        <div className="mx-auto mb-8 w-full max-w-[420px] rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center backdrop-blur-md">
+          <div className="text-[10px] font-black uppercase tracking-[0.28em] text-white/45">Season Ends In</div>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[
+              { v: days, l: "DAYS" },
+              { v: hours, l: "HOURS" },
+              { v: mins, l: "MINUTES" },
+              { v: secs, l: "SECONDS" },
+            ].map((u) => (
+              <div key={u.l}>
+                <div className="text-2xl font-black tabular-nums text-white">{String(u.v).padStart(2, "0")}</div>
+                <div className="mt-1 text-[8px] font-black uppercase tracking-[0.22em] text-white/35">{u.l}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[9px] font-black uppercase tracking-[0.24em] text-white/35">Ranks reset every month</div>
+          <button className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-white/70 hover:border-white/30 hover:text-white">
+            View Rewards
           </button>
         </div>
 
