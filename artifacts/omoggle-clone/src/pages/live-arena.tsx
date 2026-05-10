@@ -207,7 +207,7 @@ export default function LiveArena() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-[1400px] flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-3">
+      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-[1400px] flex-col gap-2 px-2 py-2 pb-[env(safe-area-inset-bottom)] sm:gap-4 sm:px-4 sm:py-3">
         {/* Tug-of-war bar */}
         <div className="rounded-[14px] border border-white/10 bg-black/40 px-3 py-2 backdrop-blur">
           <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em]">
@@ -228,7 +228,7 @@ export default function LiveArena() {
           </div>
         </div>
 
-        <section className="grid flex-1 gap-3 sm:gap-4 lg:grid-cols-2">
+        <section className="grid flex-1 grid-cols-1 gap-2 sm:gap-4 lg:grid-cols-2">
           <VideoTile
             videoRef={localVideoRef}
             label="You"
@@ -262,7 +262,7 @@ export default function LiveArena() {
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.4em] text-cyan-200">Get Ready</div>
-            <div className="mt-2 text-[140px] font-black leading-none tracking-[-0.08em] text-white drop-shadow-[0_0_40px_rgba(34,211,238,0.5)]">
+            <div className="mt-2 text-[clamp(80px,28vw,140px)] font-black leading-none tracking-[-0.08em] text-white drop-shadow-[0_0_40px_rgba(34,211,238,0.5)]">
               {countdown}
             </div>
           </div>
