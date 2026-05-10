@@ -275,7 +275,7 @@ export default function LiveArena() {
           winner={winner}
           youScore={peakLocal}
           oppScore={mp.opponentPeak}
-          oppName={mp.opponentName ?? "Opponent"}
+          oppName="Opponent"
           onRematch={restart}
         />
       )}
