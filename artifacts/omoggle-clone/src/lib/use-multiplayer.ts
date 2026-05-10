@@ -60,6 +60,7 @@ export function useMultiplayer(): MultiplayerState & MultiplayerControls {
   const eventSubsRef = useRef<Set<(t: string) => void>>(new Set());
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
   const finalizedRef = useRef(false);
+  const heartbeatRef = useRef<number | null>(null);
 
   /** Tear down everything */
   const cleanup = () => {
@@ -69,6 +70,17 @@ export function useMultiplayer(): MultiplayerState & MultiplayerControls {
     if (lobbyRef.current && supabase) supabase.removeChannel(lobbyRef.current);
     channelRef.current = null;
     lobbyRef.current = null;
+    if (heartbeatRef.current !== null) {
+      window.clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+    // Best-effort: drop self from queue if still parked there.
+    if (supabase) {
+      supabase.auth.getUser().then(({ data }) => {
+        const uid = data.user?.id;
+        if (uid) supabase!.from("matchmaking_queue").delete().eq("user_id", uid);
+      }).catch(() => {});
+    }
   };
 
   useEffect(() => () => cleanup(), []);
@@ -254,6 +266,47 @@ export function useMultiplayer(): MultiplayerState & MultiplayerControls {
       await wireMatchChannel(out.match.id, uid, false, localStream);
     } else {
       setStatus("waiting");
+      // Heartbeat: keep our queue entry fresh while we wait so the matchmaker
+      // doesn't treat us as stale, and re-poll for opponents periodically.
+      if (heartbeatRef.current === null) {
+        heartbeatRef.current = window.setInterval(async () => {
+          if (channelRef.current) return; // already matched
+          try {
+            await supabase!
+              .from("matchmaking_queue")
+              .upsert({ user_id: uid, joined_at: new Date().toISOString() }, { onConflict: "user_id" });
+            const s2 = (await supabase!.auth.getSession()).data.session;
+            const r2 = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/matchmaker`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${s2?.access_token}`,
+                  apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  "Content-Type": "application/json",
+                },
+                body: "{}",
+              },
+            );
+            const o2 = await r2.json();
+            if (o2.status === "matched" && !channelRef.current) {
+              if (heartbeatRef.current !== null) {
+                window.clearInterval(heartbeatRef.current);
+                heartbeatRef.current = null;
+              }
+              setMatchId(o2.match.id);
+              setIsPlayerA(false);
+              const notify = supabase!.channel(`user:${o2.match.player_a}`);
+              await new Promise<void>((res) =>
+                notify.subscribe((s) => s === "SUBSCRIBED" && res()),
+              );
+              notify.send({ type: "broadcast", event: "matched", payload: { match_id: o2.match.id } });
+              setTimeout(() => { try { supabase!.removeChannel(notify); } catch {} }, 1500);
+              await wireMatchChannel(o2.match.id, uid, false, localStream);
+            }
+          } catch {}
+        }, 7_000);
+      }
     }
   };
 

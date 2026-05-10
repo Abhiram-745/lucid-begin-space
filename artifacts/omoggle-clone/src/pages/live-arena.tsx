@@ -207,7 +207,7 @@ export default function LiveArena() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-[1400px] flex-col gap-3 px-2 py-2 sm:gap-4 sm:px-4 sm:py-3">
+      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-3rem)] w-full max-w-[1400px] flex-col gap-2 px-2 py-2 pb-[env(safe-area-inset-bottom)] sm:gap-4 sm:px-4 sm:py-3">
         {/* Tug-of-war bar */}
         <div className="rounded-[14px] border border-white/10 bg-black/40 px-3 py-2 backdrop-blur">
           <div className="mb-1 flex items-center justify-between text-[9px] font-black uppercase tracking-[0.2em]">
@@ -228,7 +228,7 @@ export default function LiveArena() {
           </div>
         </div>
 
-        <section className="grid flex-1 gap-3 sm:gap-4 lg:grid-cols-2">
+        <section className="grid flex-1 grid-cols-1 gap-2 sm:gap-4 lg:grid-cols-2">
           <VideoTile
             videoRef={localVideoRef}
             label="You"
@@ -262,7 +262,7 @@ export default function LiveArena() {
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="text-center">
             <div className="text-[11px] font-black uppercase tracking-[0.4em] text-cyan-200">Get Ready</div>
-            <div className="mt-2 text-[140px] font-black leading-none tracking-[-0.08em] text-white drop-shadow-[0_0_40px_rgba(34,211,238,0.5)]">
+            <div className="mt-2 text-[clamp(80px,28vw,140px)] font-black leading-none tracking-[-0.08em] text-white drop-shadow-[0_0_40px_rgba(34,211,238,0.5)]">
               {countdown}
             </div>
           </div>
@@ -497,7 +497,7 @@ function VideoTile({
   const pct = Math.max(0, Math.min(100, (score / 10) * 100));
   const grad = color === "emerald" ? "from-emerald-400 to-cyan-300" : "from-violet-400 to-fuchsia-400";
   return (
-    <div className="relative min-h-[300px] overflow-hidden rounded-[20px] border border-white/14 bg-[#070914] sm:min-h-[420px]">
+    <div className="relative aspect-[3/4] min-h-[200px] overflow-hidden rounded-[20px] border border-white/14 bg-[#070914] sm:aspect-auto sm:min-h-[420px]">
       <video
         ref={videoRef}
         autoPlay
@@ -522,13 +522,13 @@ function VideoTile({
           </div>
         </div>
       )}
-      <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white">{label}</div>
-      <div className="absolute right-4 top-4 rounded-[14px] border border-white/15 bg-black/55 px-3 py-2 text-right backdrop-blur-md">
+      <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white sm:left-4 sm:top-4 sm:px-3">{label}</div>
+      <div className="absolute right-2 top-2 rounded-[12px] border border-white/15 bg-black/55 px-2.5 py-1.5 text-right backdrop-blur-md sm:right-4 sm:top-4 sm:rounded-[14px] sm:px-3 sm:py-2">
         <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">UNMOG</div>
-        <div className="text-3xl font-black tracking-[-0.05em] text-white">{score.toFixed(1)}</div>
+        <div className="text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">{score.toFixed(1)}</div>
       </div>
       {traits && (traits.good.length > 0 || traits.bad.length > 0) && !noFace && (
-        <div className="absolute right-3 top-20 max-w-[200px] rounded-[12px] border border-white/15 bg-black/60 p-2 backdrop-blur-md">
+        <div className="absolute right-2 top-[64px] hidden max-w-[160px] rounded-[12px] border border-white/15 bg-black/60 p-2 backdrop-blur-md sm:right-3 sm:top-20 sm:block sm:max-w-[200px]">
           {traits.bad.length > 0 && (
             <div className="mb-1.5">
               <div className="mb-1 text-[8px] font-black uppercase tracking-[0.2em] text-rose-300">Boosting</div>
