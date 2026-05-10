@@ -1,0 +1,7 @@
+project_id = "rwvizvywtbysbbigizbx"
+
+[functions.matchmaker]
+verify_jwt = false
+
+[functions.finalize-match]
+verify_jwt = false

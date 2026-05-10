@@ -1,176 +1,202 @@
 import { useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import {
+  AudioTracker,
+  TemporalTracker,
+  extractSpatial,
+  extractEmotion,
+  extractStructure,
+  scoreFromFeatures,
+  type ChaosBreakdown,
+} from "./chaos-scorer";
 
-/** Lightweight silliness score from MediaPipe landmarks (0–10). Feels responsive without full chaos-scorer bundle. */
-export type ChaosBreakdown = {
-  score: number;
-  traits: { good: Array<{ label: string; v: number }>; bad: Array<{ label: string; v: number }> };
-  audio: { spike: number };
-};
-
-function dist(
-  a: { x: number; y: number },
-  b: { x: number; y: number },
-): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+let visionLoader: Promise<Awaited<ReturnType<typeof FilesetResolver.forVisionTasks>>> | null = null;
+function getVision() {
+  if (!visionLoader) {
+    visionLoader = FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
+    );
+  }
+  return visionLoader;
 }
 
-/** Face landmark indices (MediaPipe Face Landmarker). */
-const I = {
-  forehead: 10,
-  chin: 152,
-  mouthTop: 13,
-  mouthBot: 14,
-  mouthL: 61,
-  mouthR: 291,
-  nose: 1,
-  lEyeOut: 33,
-  rEyeOut: 263,
-  lBrow: 107,
-  rBrow: 336,
-};
-
-function scoreLandmarks(lm: Array<{ x: number; y: number }>): ChaosBreakdown {
-  const eyeSpan = dist(lm[I.lEyeOut], lm[I.rEyeOut]) || 1e-6;
-  const mouthOpen = dist(lm[I.mouthTop], lm[I.mouthBot]) / eyeSpan;
-  const mouthWide = dist(lm[I.mouthL], lm[I.mouthR]) / eyeSpan;
-  const jawDrop = dist(lm[I.forehead], lm[I.chin]) / eyeSpan;
-  const browRaise = dist(lm[I.lBrow], lm[I.rBrow]) / eyeSpan;
-
-  const chaosRaw =
-    mouthOpen * 4.2 +
-    mouthWide * 2.1 +
-    Math.max(0, browRaise - 0.35) * 3 +
-    Math.max(0, jawDrop - 0.85) * 1.4;
-
-  const score = Math.max(0, Math.min(10, chaosRaw * 2.4));
-
-  const traits: ChaosBreakdown["traits"] = { good: [], bad: [] };
-  if (mouthOpen > 0.12) traits.bad.push({ label: "Mouth chaos", v: mouthOpen });
-  if (mouthWide > 0.45) traits.bad.push({ label: "Wide grimace", v: mouthWide });
-
-  return {
-    score,
-    traits,
-    audio: { spike: 0 },
-  };
+async function createLandmarker(): Promise<FaceLandmarker> {
+  const vision = await getVision();
+  return FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO",
+    numFaces: 1,
+  });
 }
 
-export function useChaosPipeline(opts: {
-  videoRef: RefObject<HTMLVideoElement | null>;
-  audioStream: MediaStream | null;
-}) {
-  const { videoRef, audioStream } = opts;
-  const [hasFace, setHasFace] = useState(false);
+export interface PipelineState {
+  ready: boolean;
+  breakdown: ChaosBreakdown | null;
+  hasFace: boolean;
+  oppMouthProxy: number; // exposed so an EventDetector can read opponent smile
+}
+
+export interface PipelineOptions {
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** If a MediaStream is provided, audio is analyzed (local player only). */
+  audioStream?: MediaStream | null;
+  /** Called after every score update with the latest breakdown. */
+  onTick?: (b: ChaosBreakdown) => void;
+}
+
+export function useChaosPipeline(opts: PipelineOptions): PipelineState {
+  const { videoRef, audioStream, onTick } = opts;
+  const [ready, setReady] = useState(false);
   const [breakdown, setBreakdown] = useState<ChaosBreakdown | null>(null);
-  const landmarkerRef = useRef<FaceLandmarker | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const lastVideoTimeRef = useRef(-1);
+  const [hasFace, setHasFace] = useState(false);
+  const [oppMouthProxy, setOppMouthProxy] = useState(0);
+
+  const temporal = useRef(new TemporalTracker());
+  const audioTracker = useRef(new AudioTracker());
+  const prevScore = useRef(0);
   const rafRef = useRef(0);
+  const lastT = useRef(-1);
+  const missFramesRef = useRef(0);
+  const hitFramesRef = useRef(0);
+
+  // Set up audio analyser
+  const audioCtx = useRef<AudioContext | null>(null);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const timeBuf = useRef<Float32Array | null>(null);
+  const freqBuf = useRef<Uint8Array | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm",
-        );
-        const lm = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "CPU",
-          },
-          runningMode: "VIDEO",
-          numFaces: 1,
-        });
-        if (!cancelled) landmarkerRef.current = lm;
-      } catch {
-        if (!cancelled) landmarkerRef.current = null;
-      }
-    })();
+    if (!audioStream) return;
+    const ctx = new AudioContext();
+    const src = ctx.createMediaStreamSource(audioStream);
+    const an = ctx.createAnalyser();
+    an.fftSize = 1024;
+    src.connect(an);
+    audioCtx.current = ctx;
+    analyser.current = an;
+    timeBuf.current = new Float32Array(an.fftSize);
+    freqBuf.current = new Uint8Array(an.frequencyBinCount);
     return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!audioStream?.getAudioTracks().length) {
-      analyserRef.current = null;
-      return;
-    }
-    try {
-      const ctx = new AudioContext();
-      audioCtxRef.current = ctx;
-      const src = ctx.createMediaStreamSource(audioStream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      analyserRef.current = analyser;
-    } catch {
-      analyserRef.current = null;
-    }
-    return () => {
-      try {
-        audioCtxRef.current?.close();
-      } catch {
-        /* noop */
-      }
-      audioCtxRef.current = null;
-      analyserRef.current = null;
+      try { ctx.close(); } catch {}
+      audioCtx.current = null;
+      analyser.current = null;
     };
   }, [audioStream]);
 
   useEffect(() => {
-    const tick = () => {
+    let cancelled = false;
+    let landmarker: FaceLandmarker | null = null;
+
+    createLandmarker().then((lm) => {
+      if (cancelled) return;
+      landmarker = lm;
+      setReady(true);
+    });
+
+    const loop = () => {
       const video = videoRef.current;
-      const lm = landmarkerRef.current;
-      if (!video || video.readyState < 2 || !lm) {
-        rafRef.current = requestAnimationFrame(tick);
+      if (!video || video.readyState < 2 || !landmarker) {
+        rafRef.current = requestAnimationFrame(loop);
         return;
       }
-
-      if (video.currentTime === lastVideoTimeRef.current) {
-        rafRef.current = requestAnimationFrame(tick);
+      if (video.currentTime === lastT.current) {
+        rafRef.current = requestAnimationFrame(loop);
         return;
       }
-      lastVideoTimeRef.current = video.currentTime;
-
-      let audioSpike = 0;
-      const analyser = analyserRef.current;
-      if (analyser) {
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        analyser.getByteFrequencyData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i];
-        audioSpike = Math.min(1, sum / (data.length * 255));
-      }
+      lastT.current = video.currentTime;
 
       try {
-        const result = lm.detectForVideo(video, performance.now());
-        const face = result.faceLandmarks?.[0];
-        if (face?.length) {
-          const b = scoreLandmarks(face);
-          b.audio = { spike: audioSpike };
-          setHasFace(true);
+        const result = landmarker.detectForVideo(video, performance.now());
+        const lm = result.faceLandmarks?.[0];
+        // Compute bbox area to gauge how much of the frame the face occupies.
+        let bboxArea = 0;
+        if (lm && lm.length > 400) {
+          let xMin = 1, yMin = 1, xMax = 0, yMax = 0;
+          for (const p of lm) {
+            if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
+            if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
+          }
+          bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
+        }
+        const detected = !!(lm && lm.length > 400 && bboxArea > 0.006);
+        if (detected) {
+          missFramesRef.current = 0;
+          hitFramesRef.current = Math.min(30, hitFramesRef.current + 1);
+          // Require 3 consecutive hits before declaring face present.
+          if (hitFramesRef.current >= 3) setHasFace(true);
+
+          const spatial = extractSpatial(lm as any);
+          const emotion = extractEmotion(lm as any);
+          const structure = extractStructure(lm as any);
+          const temp = temporal.current.update(spatial, lm as any);
+
+          // Confidence: warm-up + bbox size − motion penalty. Floor 0.5
+          // so a normal-distance face is never crushed.
+          const warmup = Math.min(1, hitFramesRef.current / 6);
+          const sizeConf = Math.min(1, bboxArea / 0.07);
+          const motionPenalty = Math.min(0.22, temp.motionInstability * 0.28);
+          const confidence = Math.max(0.5, Math.min(warmup, sizeConf) - motionPenalty);
+
+          // audio
+          let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
+          if (analyser.current && timeBuf.current && freqBuf.current) {
+            analyser.current.getFloatTimeDomainData(timeBuf.current as unknown as Float32Array<ArrayBuffer>);
+            analyser.current.getByteFrequencyData(freqBuf.current as unknown as Uint8Array<ArrayBuffer>);
+            audio = audioTracker.current.update(
+              timeBuf.current,
+              freqBuf.current,
+              audioCtx.current?.sampleRate ?? 48000,
+            );
+          }
+
+          const b = scoreFromFeatures(
+            spatial, temp, audio, undefined, prevScore.current, emotion, structure,
+            0, 0, confidence,
+          );
+          prevScore.current = b.score;
           setBreakdown(b);
+          setOppMouthProxy(spatial.mouthDistortion);
+          onTick?.(b);
         } else {
-          setHasFace(false);
-          setBreakdown(null);
+          hitFramesRef.current = 0;
+          missFramesRef.current = Math.min(60, missFramesRef.current + 1);
+          // Require 6 consecutive misses (~200ms) before clearing face state,
+          // so brief tracker hiccups don't blank the HUD.
+          if (missFramesRef.current >= 6) {
+            setHasFace(false);
+            // Reset score + temporal so resumed detection starts fresh.
+            prevScore.current = 0;
+            temporal.current.reset();
+            // Emit a no-face breakdown so consumers can show the empty state.
+            const empty = scoreFromFeatures(
+              { asymmetry: 0, mouthDistortion: 0, teethExposure: 0, eyeChaos: 0, chinCompression: 0, headAngle: 0, raw: { asymmetryPct: 0, mouthOpenRatio: 0, teethExposure: 0, chinCompression: 0, headTiltDeg: 0 } },
+              { expressionVolatility: 0, motionInstability: 0, commitment: 0, momentum: 0, peak: 0 },
+              { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 },
+              undefined, 0,
+              { surprise: 0, anger: 0, confusion: 0, exaggeration: 0, intensity: 0, smile: 0, grimace: 0, genuineSmile: 0, weirdSmile: 0, tongueOut: 0 },
+              { symmetryIdeal: 0, ratioDeviation: 0, cantalDeviation: 0, inversion: 0 },
+              0, 0, 0,
+            );
+            setBreakdown(empty);
+            onTick?.(empty);
+          }
         }
       } catch {
-        setHasFace(false);
-        setBreakdown(null);
+        // mediapipe occasionally throws on un-warmed frames
       }
-
-      rafRef.current = requestAnimationFrame(tick);
+      rafRef.current = requestAnimationFrame(loop);
     };
+    rafRef.current = requestAnimationFrame(loop);
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [videoRef]);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafRef.current);
+    };
+  }, [videoRef, onTick]);
 
-  return { hasFace, breakdown };
+  return { ready, breakdown, hasFace, oppMouthProxy };
 }

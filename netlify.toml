@@ -1,0 +1,27 @@
+[build]
+  base = "artifacts/omoggle-clone"
+  command = "cd ../.. && corepack pnpm install --frozen-lockfile --ignore-scripts && corepack pnpm --filter @workspace/omoggle-clone run build"
+  publish = "dist/public"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Supabase browser-safe publishable values — Vite inlines these at build time.
+  # These are the anon/publishable keys (NOT service_role) so committing them
+  # is safe and matches what would be in the gitignored .env file locally.
+  VITE_SUPABASE_URL = "https://rwvizvywtbysbbigizbx.supabase.co"
+  VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3dml6dnl3dGJ5c2JiaWdpemJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNjEwOTksImV4cCI6MjA5MzgzNzA5OX0.07kfHCcRMIgjoGZAdaWrn-Dz-8nOdNTfIJa8Osxj8o0"
+  VITE_SUPABASE_PROJECT_ID = "rwvizvywtbysbbigizbx"
+
+# Required so getUserMedia() (camera + mic permission popup) is allowed
+# on the deployed site. Without an explicit policy some browsers / embedders
+# silently block the prompt from ever appearing.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "camera=(self), microphone=(self), autoplay=(self), display-capture=(self)"
+    Feature-Policy = "camera 'self'; microphone 'self'; autoplay 'self'"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

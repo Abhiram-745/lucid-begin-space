@@ -8,7 +8,10 @@ export const hasSupabaseConfig = Boolean(
 );
 
 export const supabase = hasSupabaseConfig
-  ? createClient(supabaseUrl, supabasePublishableKey)
+  ? createClient(supabaseUrl, supabasePublishableKey, {
+      auth: { persistSession: true, autoRefreshToken: true },
+      realtime: { params: { eventsPerSecond: 20 } },
+    })
   : null;
 
 export type AuthResult = { userId: string | null; error?: string };
