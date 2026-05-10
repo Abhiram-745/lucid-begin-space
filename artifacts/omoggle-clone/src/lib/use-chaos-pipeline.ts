@@ -62,6 +62,10 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
   const lastT = useRef(-1);
   const missFramesRef = useRef(0);
   const hitFramesRef = useRef(0);
+  // Throttle the heavy detect+score loop to ~20Hz so weaker devices stay
+  // smooth. The browser RAF still ticks at 60Hz, we just early-return.
+  const lastProcessMs = useRef(0);
+  const PROCESS_INTERVAL_MS = 50;
 
   // Set up audio analyser
   const audioCtx = useRef<AudioContext | null>(null);
@@ -107,6 +111,12 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
         rafRef.current = requestAnimationFrame(loop);
         return;
       }
+      const nowMs = performance.now();
+      if (nowMs - lastProcessMs.current < PROCESS_INTERVAL_MS) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
+      lastProcessMs.current = nowMs;
       lastT.current = video.currentTime;
 
       try {
