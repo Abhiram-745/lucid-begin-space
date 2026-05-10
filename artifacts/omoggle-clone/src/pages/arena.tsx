@@ -12,6 +12,7 @@ type LobbyCardProps = {
   featured?: boolean;
   extra?: ReactNode;
   href?: string;
+  onClick?: () => void;
 };
 
 type RuleCardProps = {
@@ -251,6 +252,7 @@ function LobbyPanel({
   featured = false,
   extra,
   href,
+  onClick,
 }: LobbyCardProps) {
   const content = (
     <section
@@ -295,6 +297,14 @@ function LobbyPanel({
       {extra}
     </section>
   );
+
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="block h-full min-w-0 cursor-pointer text-left">
+        {content}
+      </button>
+    );
+  }
 
   if (!href) return content;
 
