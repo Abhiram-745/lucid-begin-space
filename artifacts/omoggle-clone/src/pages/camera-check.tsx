@@ -7,8 +7,9 @@ import { PageShell } from "@/components/page-shell";
 type CheckStep = "preparing" | "align" | "blink" | "turn" | "done";
 const STEPS: CheckStep[] = ["align", "blink", "turn", "done"];
 
-// MediaPipe face mesh tessellation connections (drawn as a green wireframe)
-const TESSELATION = FaceLandmarker.FACE_LANDMARKS_TESSELATION as ReadonlyArray<{ start: number; end: number }>;
+// Key landmark indices for the prominent green dots (forehead, brows, nose,
+// cheeks, mouth corners, chin). Everything else is drawn as a faint cyan dot.
+const KEY_LANDMARKS = [10, 55, 285, 1, 50, 280, 61, 291, 152, 17];
 
 export default function CameraCheck() {
   const [, setLocation] = useLocation();
@@ -114,28 +115,30 @@ export default function CameraCheck() {
         const faces = result.faceLandmarks;
         if (faces && faces.length > 0) {
           const landmarks = faces[0];
-          const meshColor = isDone ? "rgba(74,222,128,0.85)" : "rgba(74,222,128,0.7)";
-
           // Mirror transform (video is -scale-x-100)
           ctx.save();
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
 
-          // Draw tessellation wireframe
-          ctx.strokeStyle = meshColor;
-          ctx.lineWidth = 0.6;
-          ctx.shadowColor = "rgba(74,222,128,0.55)";
-          ctx.shadowBlur = 4;
-          ctx.beginPath();
-          for (let i = 0; i < TESSELATION.length; i++) {
-            const c = TESSELATION[i];
-            const a = landmarks[c.start];
-            const b = landmarks[c.end];
-            if (!a || !b) continue;
-            ctx.moveTo(a.x * canvas.width, a.y * canvas.height);
-            ctx.lineTo(b.x * canvas.width, b.y * canvas.height);
+          // 1. Faint cyan dot per landmark — light, dotted "scan" feel.
+          ctx.fillStyle = "rgba(120,220,255,0.55)";
+          for (let i = 0; i < landmarks.length; i++) {
+            const p = landmarks[i];
+            if (!p) continue;
+            ctx.fillRect(p.x * canvas.width - 0.5, p.y * canvas.height - 0.5, 1, 1);
           }
-          ctx.stroke();
+
+          // 2. Bright green key-point dots with a soft glow.
+          ctx.shadowColor = "rgba(74,222,128,0.85)";
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = isDone ? "rgba(74,222,128,1)" : "rgba(74,222,128,0.95)";
+          for (const idx of KEY_LANDMARKS) {
+            const p = landmarks[idx];
+            if (!p) continue;
+            ctx.beginPath();
+            ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
           ctx.shadowBlur = 0;
 
           ctx.restore();
