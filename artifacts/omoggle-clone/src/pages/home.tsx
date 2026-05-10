@@ -1,75 +1,128 @@
-import { GuestBanner } from "@/components/guest-banner";
-import { Swords, Trophy, ChevronRight } from "lucide-react";
+import { Fragment } from "react";
+import { PageShell } from "@/components/page-shell";
+import { Swords, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
+
+const STEPS = [
+  {
+    n: "1",
+    title: "Camera check",
+    body: "Complete a quick camera check to get started.",
+    hoverClass:
+      "hover:border-violet-400/45 hover:shadow-[0_22px_50px_-14px_rgba(168,85,247,0.55),0_12px_0_-4px_rgba(76,29,149,0.55),inset_0_1px_0_rgba(255,255,255,0.12)] hover:ring-2 hover:ring-violet-500/30",
+  },
+  {
+    n: "2",
+    title: "Solo PSL scan",
+    body: "Take a Solo PSL Scan to verify you unmog.",
+    hoverClass:
+      "hover:border-cyan-400/45 hover:shadow-[0_22px_50px_-14px_rgba(34,211,238,0.45),0_12px_0_-4px_rgba(8,145,178,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] hover:ring-2 hover:ring-cyan-400/25",
+  },
+  {
+    n: "3",
+    title: "Compete & climb",
+    body: "Win matches, earn points, and climb the ladder.",
+    hoverClass:
+      "hover:border-emerald-400/45 hover:shadow-[0_22px_50px_-14px_rgba(52,211,153,0.45),0_12px_0_-4px_rgba(6,95,70,0.5),inset_0_1px_0_rgba(255,255,255,0.12)] hover:ring-2 hover:ring-emerald-400/25",
+  },
+] as const;
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-[#050505] relative overflow-hidden">
-      <div
-        className="absolute inset-x-0 top-0 h-[980px] pointer-events-none"
-        style={{
-          background:
-            "radial-gradient(ellipse 70% 48% at 50% 0%, rgba(120, 40, 200, 0.18) 0%, rgba(120, 40, 200, 0.06) 34%, transparent 72%)",
-        }}
-      />
-      <div className="absolute bottom-[-260px] left-[-180px] w-[760px] h-[760px] bg-primary/10 blur-[140px] rounded-full pointer-events-none" />
-
-      <GuestBanner />
-
-      <main className="flex-1 flex flex-col items-center justify-start px-5 pb-8 pt-9 sm:px-8 sm:pb-10 sm:pt-12 relative z-10 max-w-[880px] mx-auto w-full">
-        
-        <div className="flex flex-col items-center mb-10 sm:mb-12 w-full">
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-8 sm:mb-10">
-            <div className="flex items-center bg-white/8 border border-white/10 px-4 sm:px-5 py-2 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] backdrop-blur-md shadow-[0_0_24px_rgba(168,85,247,0.16)]">
-              <motion.div 
-                animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
-                transition={{ repeat: Infinity, duration: 2 }}
-                className="w-2 h-2 rounded-full bg-[#a855f7] mr-3 shadow-[0_0_14px_rgba(168,85,247,0.9)]" 
-              />
-              Live 1v1 Unmog Arena
-            </div>
+    <PageShell grid="hero" landing rebelSlash={false} className="flex min-h-[100dvh] flex-col">
+      <main className="landing-sans relative z-10 mx-auto flex w-full min-w-0 flex-1 flex-col items-center px-5 pb-12 pt-10 sm:px-8 sm:pb-16 sm:pt-14 viewport-fit-main">
+        {/* Top badge */}
+        <div className="mb-7 flex justify-center sm:mb-9">
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-white/[0.12] bg-black/40 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-[#a855f7] shadow-[0_0_12px_rgba(168,85,247,0.9)]"
+              aria-hidden
+            />
+            Live 1v1 Unmog Arena
           </div>
-
-          <h1 className="text-[clamp(5.25rem,14vw,10.75rem)] font-black text-white drop-shadow-2xl leading-[0.82] shimmer-text select-none whitespace-nowrap">
-            UNMOGGLE
-          </h1>
         </div>
 
-        <div className="w-full max-w-[600px] bg-[#0d0d1a] border border-white/8 rounded-[34px] px-7 py-10 sm:px-12 sm:py-12 flex flex-col items-center text-center shadow-[0_24px_90px_rgba(0,0,0,0.45)] relative overflow-hidden mb-10 sm:mb-12 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-purple-500/55 before:to-transparent">
-          <div className="w-20 h-20 rounded-[22px] bg-gradient-to-br from-purple-800/70 to-purple-950/90 border border-purple-500/25 flex items-center justify-center mb-8 shadow-[0_0_54px_rgba(168,85,247,0.28)]">
-            <Swords className="w-10 h-10 text-white" strokeWidth={2.4} />
+        {/* Wordmark — full width inside main so cqw + calc() can resolve to visible line */}
+        <div className="unmoggle-wordmark-wrap mb-6 w-full min-w-0 px-3 sm:mb-8 sm:px-5">
+          <h1 className="unmoggle-wordmark">UNMOGGLE</h1>
+        </div>
+
+        {/* Online badge */}
+        <div className="mb-10 flex justify-center sm:mb-12">
+          <div className="inline-flex items-center gap-2.5 rounded-full border border-emerald-500/35 bg-emerald-950/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.15),inset_0_1px_0_rgba(16,185,129,0.12)] backdrop-blur-md">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-[#10b981] shadow-[0_0_10px_rgba(16,185,129,0.85)]"
+              aria-hidden
+            />
+            2.1K Online
           </div>
-          
-          <h2 className="text-2xl sm:text-3xl font-bold uppercase tracking-[0.18em] mb-8 sm:mb-10 text-white">Enter the Arena</h2>
-          
+        </div>
+
+        {/* Primary CTA — entire card is one interactive control */}
+        <div className="mb-14 w-full max-w-[42rem]">
           <Link
-            href="/arena"
-            className="w-full bg-white text-black hover:bg-white/90 uppercase font-black tracking-widest h-16 sm:h-18 rounded-full flex items-center justify-center gap-3 transition-all duration-300 shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_24px_70px_rgba(255,255,255,0.1)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),_0_20px_80px_rgba(255,255,255,0.16)] hover:-translate-y-1 mb-6 text-sm sm:text-base"
+            href="/camera-check?returnTo=/arena"
+            aria-label="Enter the arena, start camera check. By entering you agree to the Terms of Service and Privacy Policy."
+            className="group relative block overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-b from-white/[0.07] to-white/[0.02] px-8 py-10 shadow-[0_32px_100px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl transition-all duration-300 hover:border-violet-400/35 hover:shadow-[0_38px_110px_rgba(88,28,135,0.38)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a] sm:px-12 sm:py-12"
           >
-            Enter Arena <ChevronRight className="w-5 h-5" />
-          </Link>
-          
-          <p className="text-[10px] sm:text-xs text-white/40 uppercase tracking-[0.18em] max-w-[390px] leading-relaxed">
-            By entering the arena you agree to our Terms of Service and Privacy Policy
-          </p>
-        </div>
+            <div className="pointer-events-none absolute inset-0 rounded-[28px] shadow-[inset_0_0_60px_rgba(168,85,247,0.05)] transition-opacity group-hover:opacity-100" />
 
-        <div className="w-full mb-8">
-          <Link href="/leaderboard" className="min-h-[82px] bg-[#0d0d1a] border border-white/8 hover:border-white/15 hover:bg-[#111126] transition-all duration-300 rounded-[18px] px-7 py-5 flex items-center justify-between group cursor-pointer w-full">
-            <div className="flex items-center gap-5">
-              <Trophy className="w-7 h-7 text-amber-400 drop-shadow-[0_0_12px_rgba(251,191,36,0.35)]" />
-              <span className="font-normal uppercase tracking-wider text-lg sm:text-xl text-white">View Leaderboard</span>
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-8 flex h-[5.25rem] w-[5.25rem] items-center justify-center rounded-[22px] border border-white/15 bg-gradient-to-br from-zinc-400/25 via-zinc-600/15 to-zinc-900/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_16px_48px_rgba(0,0,0,0.45)] transition-transform duration-300 group-hover:scale-[1.03]">
+                <Swords
+                  className="h-11 w-11 text-zinc-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+              </div>
+
+              <span className="font-display text-2xl font-bold uppercase tracking-[0.22em] text-white sm:text-[1.65rem] sm:tracking-[0.26em]">
+                Enter the Arena
+              </span>
+
+              <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.28em] text-violet-300/95 transition-colors group-hover:text-violet-200">
+                Start Camera Check
+                <ChevronRight
+                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+                  strokeWidth={2.5}
+                  aria-hidden
+                />
+              </span>
+
+              <p className="mt-10 max-w-md text-center text-[10px] font-medium uppercase leading-relaxed tracking-[0.18em] text-white/40 sm:text-[11px]">
+                By entering the arena you agree to our Terms of Service and Privacy Policy
+              </p>
             </div>
-            <ChevronRight className="w-6 h-6 text-white/40 group-hover:text-white transition-colors" />
           </Link>
         </div>
 
-        <div className="text-xs text-white/20 uppercase tracking-[0.2em] text-center">
-          LIVE 1V1 ARENA · RANKED MATCHES · REAL-TIME LEADERBOARD
+        {/* Steps row — hover: lift + 3D coloured shadow */}
+        <div className="flex w-full max-w-5xl flex-col gap-6 md:flex-row md:items-stretch md:justify-center md:gap-0 md:py-2">
+          {STEPS.map((step, i) => (
+            <Fragment key={step.n}>
+              <article
+                className={`group relative flex flex-1 flex-col rounded-2xl border border-white/[0.09] bg-[#0f0f0f]/85 px-5 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-300 ease-out will-change-transform hover:z-10 hover:-translate-y-2 hover:scale-[1.03] hover:border-white/20 md:min-w-0 md:flex-1 ${step.hoverClass}`}
+              >
+                <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-black/60 text-sm font-black text-white">
+                  {step.n}
+                </div>
+                <h3 className="text-[12px] font-bold uppercase leading-tight tracking-[0.14em] text-white sm:text-[13px]">
+                  {step.title}
+                </h3>
+                <p className="mt-2 text-[12px] leading-snug text-white/45">{step.body}</p>
+              </article>
+              {i < STEPS.length - 1 && (
+                <div
+                  className="hidden shrink-0 items-center justify-center self-center px-1 md:flex"
+                  aria-hidden
+                >
+                  <ChevronRight className="h-5 w-5 text-white/20" strokeWidth={2} />
+                </div>
+              )}
+            </Fragment>
+          ))}
         </div>
       </main>
-
-    </div>
+    </PageShell>
   );
 }

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Inter:wght@400..900&family=Syne:wght@400..800&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -60,6 +60,7 @@
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+  --font-display: var(--app-font-display);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -126,6 +127,7 @@
   --app-font-sans: 'Geist Mono', monospace;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'Geist Mono', monospace;
+  --app-font-display: 'Syne', ui-sans-serif, system-ui, sans-serif;
   --radius: 1rem;
   --shadow-2xs: 0px 2px 0px 0px rgba(0,0,0,0);
   --shadow-xs: 0px 2px 0px 0px rgba(0,0,0,0);
@@ -197,5 +199,118 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     animation: shimmer 4s linear infinite;
+  }
+
+  /* Fine grain — sits over flat gradients without changing palette */
+  .bg-noise-fine {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  }
+
+  .premium-ring {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+      0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+
+  /** Glass panel + acid lime spine — use on leaderboard rows, profile cards */
+  .rebel-card {
+    @apply relative overflow-hidden rounded-[26px] border border-white/[0.10] bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-xl;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 24px 80px rgba(0, 0, 0, 0.42);
+  }
+  .rebel-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, rgba(223, 255, 74, 0.95), rgba(168, 85, 247, 0.35), transparent 72%);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  /** Display titles — sharp, editorial */
+  .rebel-heading {
+    font-family: var(--app-font-display);
+    letter-spacing: -0.03em;
+    font-weight: 800;
+  }
+
+  @keyframes rebel-glitch {
+    0%, 100% { transform: translate(0); opacity: 1; }
+    92% { transform: translate(0); }
+    93% { transform: translate(-1px, 1px); opacity: 0.92; }
+    94% { transform: translate(1px, -1px); opacity: 1; }
+    95% { transform: translate(-1px, 0); }
+  }
+  .rebel-glitch-hover:hover {
+    animation: rebel-glitch 4s ease-in-out infinite;
+  }
+
+  /**
+   * Home / landing primary column: fits viewport; from lg up caps near half-screen width.
+   */
+  .viewport-fit-main {
+    width: 100%;
+    max-width: min(100%, calc(100vw - 1.5rem));
+    margin-left: auto;
+    margin-right: auto;
+  }
+  @media (min-width: 1024px) {
+    .viewport-fit-main {
+      max-width: min(880px, calc(50vw - 2rem));
+    }
+  }
+
+  /** Width anchor so font scales to column (fixes overflow when main is max 50vw on lg+) */
+  .unmoggle-wordmark-wrap {
+    container-type: inline-size;
+    container-name: unmoggle;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /**
+   * UNMOGGLE — scales to the wordmark container (cqw), not raw 100vw (fixes overflow when main is ~50vw).
+   * width: 100% + nowrap: font-size must shrink so glyphs fit; calc ties em size to available inline size.
+   */
+  .unmoggle-wordmark {
+    font-family: var(--app-font-display);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 0.88;
+    text-transform: uppercase;
+    white-space: nowrap;
+    background: linear-gradient(180deg, #ffffff 0%, #d1d5db 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* Softer glow — heavy drop-shadow can extend past overflow-x-hidden ancestors */
+    filter: drop-shadow(0 0 18px rgba(168, 85, 247, 0.35))
+      drop-shadow(0 0 36px rgba(139, 92, 246, 0.14));
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    box-sizing: border-box;
+    /* ~5.5× ≈ Syne 800 word width for “UNMOGGLE”; clamp caps huge containers */
+    font-size: clamp(1rem, min(calc((100cqw - 2rem) / 5.75), 11.25cqw), 3.125rem);
+  }
+
+  @supports not (font-size: 1cqw) {
+    .unmoggle-wordmark {
+      /* No container queries — conservative vw divisor so 8 letters fit narrow phones */
+      font-size: clamp(1rem, calc((100vw - 3.5rem) / 12), 3.125rem);
+    }
+  }
+
+  .landing-sans {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 }

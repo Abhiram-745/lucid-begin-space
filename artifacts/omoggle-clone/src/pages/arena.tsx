@@ -54,7 +54,7 @@ function RuleCard({ icon, title, body, pill, tone }: RuleCardProps) {
 function HowToUnmogModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 px-3 py-3 backdrop-blur-sm">
-      <div className="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[680px] overflow-y-auto rounded-[22px] border border-purple-500/85 bg-[#050710] p-4 shadow-[0_0_48px_rgba(168,85,247,0.28),inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5">
+      <div className="relative max-h-[min(85dvh,90svh)] w-full max-w-[min(680px,calc(100vw-1.5rem))] lg:max-w-[min(680px,calc(50vw-1rem))] overflow-y-auto overscroll-y-contain rounded-[22px] border border-purple-500/85 bg-[#050710] p-4 shadow-[0_0_48px_rgba(168,85,247,0.28),inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-5">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-purple-300/75 transition hover:text-purple-200"
@@ -95,8 +95,8 @@ function HowToUnmogModal({ onClose }: { onClose: () => void }) {
           <RuleCard
             icon={<div className="relative"><span>🤡</span><span className="absolute inset-x-[-12px] top-4 h-0.5 rotate-[-28deg] bg-rose-400" /></div>}
             title="Don't Try Too Hard"
-            body="Trying to look good will mog you. Embrace the chaos."
-            pill="Trying = mogging"
+            body="Trying to look good will unmog you. Embrace the chaos."
+            pill="Trying = unmogging"
             tone="pink"
           />
           <RuleCard
@@ -157,7 +157,7 @@ function PlayerRankCard({ featured = false }: { featured?: boolean }) {
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.9)]" />
           <span className="text-[9px] font-black uppercase tracking-[0.16em] text-white sm:text-[11px] sm:tracking-[0.18em]">
-            Mogger #74
+            Unmogger #74
           </span>
         </div>
         <span className="text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100 sm:text-[10px] sm:tracking-[0.14em]">
@@ -217,7 +217,7 @@ function LobbyPanel({
 }: LobbyCardProps) {
   const content = (
     <section
-      className={`group relative flex h-full flex-col items-center justify-center overflow-hidden rounded-[38px] border bg-[linear-gradient(145deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] text-center backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_28px_90px_rgba(0,0,0,0.42)] ${hoverBorder} ${
+      className={`group relative flex h-full min-w-0 flex-col items-center justify-center overflow-hidden rounded-[38px] border bg-[linear-gradient(145deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] text-center backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_28px_90px_rgba(0,0,0,0.42)] ${hoverBorder} ${
         featured
           ? "min-h-[300px] border-cyan-100/35 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_26px_100px_rgba(34,211,238,0.08),0_20px_80px_rgba(0,0,0,0.36)] sm:min-h-[360px] sm:px-7 sm:py-7 lg:min-h-0"
           : "min-h-[220px] border-white/18 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.34)] sm:min-h-[300px] sm:px-7 sm:py-7 lg:min-h-0"
@@ -262,7 +262,7 @@ function LobbyPanel({
   if (!href) return content;
 
   return (
-    <Link href={href} className="block h-full cursor-pointer">
+    <Link href={href} className="block h-full min-w-0 cursor-pointer">
       {content}
     </Link>
   );
@@ -274,7 +274,7 @@ export default function Arena() {
     {
       icon: <Trophy className="h-16 w-16 fill-amber-400/35 text-amber-400" strokeWidth={1.6} />,
       title: "Global Rank",
-      subtitle: "Top 100 Moggers",
+      subtitle: "Top 100 Unmoggers",
       accent: "bg-[radial-gradient(circle_at_50%_32%,rgba(255,194,73,0.09),transparent_46%)]",
       hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(250,204,21,0.72),rgba(250,204,21,0.32)_42%,rgba(250,204,21,0.08)_68%,transparent_82%)]",
       hoverBorder: "hover:border-yellow-300/85 hover:shadow-[0_0_72px_rgba(250,204,21,0.22),inset_0_1px_0_rgba(255,255,255,0.12)]",
@@ -307,7 +307,7 @@ export default function Arena() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_13%,rgba(255,193,7,0.09),transparent_22%),radial-gradient(circle_at_99%_0%,rgba(120,86,255,0.16),transparent_18%),radial-gradient(circle_at_68%_62%,rgba(128,41,173,0.14),transparent_38%)]" />
       <div className="absolute inset-0 opacity-[0.04] [background-image:linear-gradient(rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:44px_44px]" />
 
-      <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[1640px] flex-col px-3 pt-3 pb-8 sm:px-8 sm:pt-6 sm:pb-10 lg:h-full lg:min-h-0 lg:px-12 lg:py-6">
+      <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[min(1640px,100%)] min-w-0 flex-col px-3 pt-3 pb-8 sm:px-8 sm:pt-6 sm:pb-10 lg:h-full lg:min-h-0 lg:px-12 lg:py-6">
         <div className="flex h-12 shrink-0 items-center justify-between gap-3 sm:h-14">
           <Link
             href="/"
@@ -329,7 +329,7 @@ export default function Arena() {
         </div>
 
         <div className="grid min-h-0 flex-1 items-center py-2 sm:py-5 lg:py-7">
-          <div className="grid h-full max-h-[calc(100dvh-5rem)] grid-cols-1 items-stretch gap-3 sm:max-h-[calc(100dvh-7rem)] sm:gap-5 lg:grid-cols-[0.88fr_1.08fr_0.88fr] lg:gap-7 xl:gap-8">
+          <div className="grid h-full max-h-[calc(100dvh-5rem)] grid-cols-1 items-stretch gap-3 sm:max-h-[calc(100dvh-7rem)] sm:gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.08fr)_minmax(0,0.88fr)] lg:gap-7 xl:gap-8">
           {panels.map((panel) => (
             <LobbyPanel key={panel.title} {...panel} />
           ))}

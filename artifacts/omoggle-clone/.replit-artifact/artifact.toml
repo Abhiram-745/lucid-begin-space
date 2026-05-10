@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Omoggle"
+title = "Unmoggle"
 version = "1.0.0"
 id = "artifacts/omoggle-clone"
 router = "path"

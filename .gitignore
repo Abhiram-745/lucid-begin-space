@@ -31,6 +31,9 @@ node_modules
 /.env
 /.env.*
 !/.env.example
+# Vite apps under artifacts (nested env — avoid accidental commits)
+artifacts/**/.env
+artifacts/**/.env.*
 /.sass-cache
 /connect.lock
 /coverage

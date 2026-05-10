@@ -2,6 +2,19 @@ import { ChevronLeft, Info } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 
+import { cn } from "@/lib/utils";
+
+const tabTransition =
+  "transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] will-change-transform";
+
+/** Inactive tabs: full gradient “glass” pop on hover */
+const tabHoverInactive3d =
+  `${tabTransition} hover:z-10 hover:-translate-y-1.5 hover:scale-[1.06] hover:bg-gradient-to-br hover:from-fuchsia-500/30 hover:via-violet-500/25 hover:to-cyan-400/25 hover:shadow-[0_20px_50px_-12px_rgba(168,85,247,0.55),0_12px_28px_-10px_rgba(34,211,238,0.4),inset_0_1px_0_rgba(255,255,255,0.25)] hover:ring-1 hover:ring-white/25 hover:brightness-110 active:translate-y-0 active:scale-[1.02]`;
+
+/** Active tab: lift + rim light without washing out white fill */
+const tabHoverActive3d =
+  `${tabTransition} hover:-translate-y-1 hover:scale-[1.04] hover:shadow-[0_24px_55px_-12px_rgba(244,114,182,0.45),0_14px_32px_-10px_rgba(34,211,238,0.35),inset_0_-2px_0_rgba(0,0,0,0.06)] hover:ring-1 hover:ring-fuchsia-400/40 active:translate-y-0 active:scale-[1.02]`;
+
 const MOCK_LEADERBOARD = [
   { rank: 1, name: "nightwing_kv", score: 24500, avatar: "N", tier: "ADAM" },
   { rank: 2, name: "lukasz_m", score: 18200, avatar: "L", tier: "SLAYER" },
@@ -74,8 +87,8 @@ export default function Leaderboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] p-4 sm:p-8 flex flex-col items-center font-mono">
-      <div className="w-full max-w-6xl">
+    <div className="min-h-screen overflow-x-hidden bg-[#050505] p-4 sm:p-8 flex flex-col items-center font-mono">
+      <div className="w-full max-w-[min(1152px,92vw)] min-w-0">
         <div className="flex items-center justify-between mb-8 mt-4">
           <button
             onClick={handleBack}
@@ -89,16 +102,40 @@ export default function Leaderboard() {
           {/* Main Content */}
           <div className="flex-1 flex flex-col">
             {/* Tabs */}
-            <div className="flex gap-4 mb-8">
-              <button 
+            <div className="flex gap-4 mb-8 [perspective:1200px]">
+              <button
+                type="button"
                 onClick={() => setActiveTab("global")}
-                className={`px-6 py-3 rounded-full font-bold uppercase text-sm tracking-wider transition-colors ${activeTab === "global" ? "bg-white text-black" : "bg-white/5 text-white/50 hover:text-white border border-white/10"}`}
+                className={cn(
+                  "relative px-6 py-3 rounded-full font-bold uppercase text-sm tracking-wider",
+                  activeTab === "global"
+                    ? cn(
+                        "z-[1] bg-white text-black shadow-[0_12px_40px_-10px_rgba(255,255,255,0.35)] ring-1 ring-white/30",
+                        tabHoverActive3d,
+                      )
+                    : cn(
+                        "bg-white/5 text-white/50 border border-white/10 hover:text-white",
+                        tabHoverInactive3d,
+                      ),
+                )}
               >
                 ⚡ Global Arena
               </button>
-              <button 
+              <button
+                type="button"
                 onClick={() => setActiveTab("season")}
-                className={`px-6 py-3 rounded-full font-bold uppercase text-sm tracking-wider transition-colors ${activeTab === "season" ? "bg-white text-black" : "bg-white/5 text-white/50 hover:text-white border border-white/10"}`}
+                className={cn(
+                  "relative px-6 py-3 rounded-full font-bold uppercase text-sm tracking-wider",
+                  activeTab === "season"
+                    ? cn(
+                        "z-[1] bg-white text-black shadow-[0_12px_40px_-10px_rgba(255,255,255,0.35)] ring-1 ring-white/30",
+                        tabHoverActive3d,
+                      )
+                    : cn(
+                        "bg-white/5 text-white/50 border border-white/10 hover:text-white",
+                        tabHoverInactive3d,
+                      ),
+                )}
               >
                 🏆 Season 1
               </button>
@@ -119,7 +156,7 @@ export default function Leaderboard() {
             </div>
 
             {/* Podium */}
-            <div className="flex items-end justify-center gap-4 mb-16 pt-8">
+            <div className="flex flex-wrap items-end justify-center gap-3 sm:gap-4 mb-16 pt-8 max-w-full">
               {/* 2nd Place */}
               <div className="flex flex-col items-center w-32 relative">
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-300 to-slate-500 p-[3px] mb-3 relative z-10 shadow-[0_0_20px_rgba(148,163,184,0.3)]">
@@ -162,16 +199,17 @@ export default function Leaderboard() {
 
             {/* List */}
             <div className="bg-[#0d0d1a] border border-white/10 rounded-[2rem] overflow-hidden shadow-xl">
-              <div className="grid grid-cols-[60px_1fr_100px_100px] gap-4 p-4 border-b border-white/5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 bg-white/[0.02]">
+              <div className="overflow-x-auto overscroll-x-contain">
+              <div className="grid min-w-[320px] grid-cols-[44px_minmax(0,1fr)_52px_56px] gap-2 p-3 sm:min-w-0 sm:grid-cols-[60px_1fr_100px_100px] sm:gap-4 sm:p-4 border-b border-white/5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 bg-white/[0.02]">
                 <div className="text-center">Rank</div>
                 <div>Player</div>
-                <div>Tier</div>
+                <div className="truncate">Tier</div>
                 <div className="text-right">ELO</div>
               </div>
               
               <div className="divide-y divide-white/5">
                 {MOCK_LEADERBOARD.slice(3).map((player) => (
-                  <div key={player.rank} className={`grid grid-cols-[60px_1fr_100px_100px] gap-4 p-4 items-center hover:bg-white/[0.03] transition-colors relative border-l-2 ${player.rank <= 5 ? TIER_COLORS[player.tier] : 'border-transparent'}`}>
+                  <div key={player.rank} className={`grid min-w-[320px] grid-cols-[44px_minmax(0,1fr)_52px_56px] gap-2 p-3 sm:min-w-0 sm:grid-cols-[60px_1fr_100px_100px] sm:gap-4 sm:p-4 items-center hover:bg-white/[0.03] transition-colors relative border-l-2 ${player.rank <= 5 ? TIER_COLORS[player.tier] : 'border-transparent'}`}>
                     <div className="text-center font-black text-sm text-white/30">
                       #{player.rank}
                     </div>
@@ -181,7 +219,7 @@ export default function Leaderboard() {
                       </div>
                       <span className="font-bold text-sm truncate text-white/90">{player.name}</span>
                     </div>
-                    <div className={`text-[10px] uppercase font-bold tracking-widest ${player.tier === 'SLAYER' ? 'text-purple-400' : player.tier === 'CHAD' ? 'text-yellow-400' : player.tier === 'CHADLITE' ? 'text-blue-400' : player.tier === 'HTN' ? 'text-cyan-400' : player.tier === 'MTN' ? 'text-green-400' : player.tier === 'LTN' ? 'text-gray-400' : player.tier === 'SUB3' ? 'text-slate-400' : 'text-zinc-400'}`}>
+                    <div className={`text-[9px] sm:text-[10px] uppercase font-bold tracking-widest truncate ${player.tier === 'SLAYER' ? 'text-purple-400' : player.tier === 'CHAD' ? 'text-yellow-400' : player.tier === 'CHADLITE' ? 'text-blue-400' : player.tier === 'HTN' ? 'text-cyan-400' : player.tier === 'MTN' ? 'text-green-400' : player.tier === 'LTN' ? 'text-gray-400' : player.tier === 'SUB3' ? 'text-slate-400' : 'text-zinc-400'}`}>
                       {player.tier}
                     </div>
                     <div className="text-right font-mono font-bold text-white text-sm">
@@ -189,6 +227,7 @@ export default function Leaderboard() {
                     </div>
                   </div>
                 ))}
+              </div>
               </div>
             </div>
           </div>

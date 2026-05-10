@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { PageShell } from "@/components/page-shell";
 
 type CheckStep = "preparing" | "align" | "blink" | "turn" | "done";
 const STEPS: CheckStep[] = ["align", "blink", "turn", "done"];
@@ -22,6 +23,8 @@ const KEY_LANDMARKS = [
 
 export default function CameraCheck() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const returnTo = new URLSearchParams(search).get("returnTo") ?? "/arena";
   const [step, setStep] = useState<CheckStep>("preparing");
   const [cameraGranted, setCameraGranted] = useState(false);
   const [stepProgress, setStepProgress] = useState(0);
@@ -206,14 +209,14 @@ export default function CameraCheck() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center px-4 py-10 font-mono">
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_47%,rgba(88,28,135,0.18),transparent_36%),linear-gradient(180deg,rgba(0,0,0,0.2),#000_76%)]" />
-      <div className="relative z-10 w-full max-w-[584px]">
-        <div className="bg-[#100d1f] border border-purple-500/35 rounded-[18px] overflow-hidden shadow-[0_0_80px_rgba(139,92,246,0.22),inset_0_1px_0_rgba(255,255,255,0.04)]">
+    <PageShell grid="hero">
+      <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-4 py-8 sm:py-10 font-mono overflow-x-hidden">
+      <div className="relative z-10 w-full max-w-[min(584px,92vw)] lg:max-w-[min(584px,calc(50vw-1rem))] min-w-0">
+        <div className="rebel-card overflow-hidden rounded-[20px] border border-purple-500/40 border-t-[#dfff4a]/25 bg-[#100d1f]/95 shadow-[0_0_90px_rgba(139,92,246,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]">
 
           {/* Header */}
           <div className="px-8 pt-12 pb-6 text-center">
-            <h1 className="text-[27px] font-black uppercase tracking-[0.34em] text-purple-300 mb-3 drop-shadow-[0_0_18px_rgba(216,180,254,0.35)]">
+            <h1 className="rebel-heading text-[27px] uppercase tracking-[0.28em] text-purple-200 mb-3 drop-shadow-[0_0_22px_rgba(216,180,254,0.4)]">
               Camera Access Check
             </h1>
             <p className="text-[13px] uppercase tracking-[0.42em] text-white/25">
@@ -222,7 +225,7 @@ export default function CameraCheck() {
           </div>
 
           {/* Video Panel */}
-          <div className="mx-8 mb-6 rounded-[22px] overflow-hidden bg-[#06040f] border border-white/5 aspect-video relative">
+          <div className="mx-4 sm:mx-8 mb-6 rounded-[22px] overflow-hidden bg-[#06040f] border border-white/5 aspect-video max-h-[min(48vh,56vw)] relative">
 
             {/* Live webcam — mirrored */}
             <video
@@ -353,7 +356,10 @@ export default function CameraCheck() {
               <motion.button
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                onClick={() => setLocation("/arena")}
+                onClick={() => {
+                  sessionStorage.setItem("unmog_camera_ok", "1");
+                  setLocation(returnTo);
+                }}
                 className="min-w-[246px] px-12 py-4 bg-white text-black font-black uppercase tracking-[0.22em] text-sm rounded-full shadow-[0_0_42px_rgba(255,255,255,0.14)] hover:shadow-[0_0_60px_rgba(255,255,255,0.24)] transition-all hover:-translate-y-0.5"
               >
                 Enter Arena
@@ -369,6 +375,7 @@ export default function CameraCheck() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }

@@ -11,8 +11,8 @@ export default function Profile() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-8 flex flex-col items-center">
-      <div className="w-full max-w-4xl">
+    <div className="min-h-screen overflow-x-hidden bg-background p-4 sm:p-8 flex flex-col items-center">
+      <div className="w-full max-w-[min(896px,92vw)] min-w-0">
         <div className="flex items-center justify-between mb-8 mt-4">
           <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-white uppercase font-bold text-xs tracking-wider transition-colors cursor-pointer">
             <ChevronLeft className="w-4 h-4" /> Back to Arena
