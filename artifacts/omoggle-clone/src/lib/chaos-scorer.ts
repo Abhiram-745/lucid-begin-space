@@ -636,10 +636,12 @@ export function scoreFromFeatures(
   );
 
   // ---- 4. TEMPORAL bucket ----------------------------------------------
+  // Commitment is a ~1s rolling average — keep its weight modest so the
+  // score doesn't stay pinned high for a full second after the user calms.
   const tempo = clamp01(
-    0.40 * t.motionInstability +
+    0.45 * t.motionInstability +
     0.30 * t.expressionVolatility +
-    0.40 * t.commitment +
+    0.18 * t.commitment +
     0.25 * t.peak,
   );
 
@@ -678,7 +680,8 @@ export function scoreFromFeatures(
     0.30 * st.symmetryIdeal +
     0.20 * (1 - st.ratioDeviation)
   );
-  const adjusted = clamp01(composite - 0.12 * composed);
+  // Stronger composed-face credit so a returning-to-neutral face drops fast.
+  const adjusted = clamp01(composite - 0.22 * composed);
 
   // ---- 8. Sigmoid → 0..10 ----------------------------------------------
   const target01 = sigmoid01(adjusted, 6.0, 0.28) * conf;
