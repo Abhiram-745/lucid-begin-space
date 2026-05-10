@@ -336,72 +336,29 @@ export default function ScorerDebug() {
           const bx = minX * w, by = minY * h;
           const bw = (maxX - minX) * w, bh = (maxY - minY) * h;
 
-          // 3. FULL TRIANGULATED FACE MESH (FACEMESH_TESSELATION)
-          //    Drawn first, low opacity, glow scales with score.
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.lineWidth = 0.5;
-          ctx.shadowBlur = 4 + t * 8;
-          ctx.shadowColor = chaosColor(t, 0.6);
-          ctx.strokeStyle = chaosColor(t, 0.10 + t * 0.18);
-          ctx.beginPath();
-          for (let i = 0; i < TESSELATION.length; i++) {
-            const c = TESSELATION[i];
-            const a = lm[c.start]; const b = lm[c.end];
-            if (!a || !b) continue;
-            ctx.moveTo(a.x * w, a.y * h);
-            ctx.lineTo(b.x * w, b.y * h);
+          // 3. DOTTED LANDMARK SCAN — faint cyan dot per landmark + bright
+          //    green key-point dots. Matches the camera-check / arena look,
+          //    much less visually "overdone" than the old wireframe.
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "rgba(120,220,255,0.55)";
+          for (let i = 0; i < lm.length; i++) {
+            const p = lm[i];
+            if (!p) continue;
+            ctx.fillRect(p.x * w - 0.5, p.y * h - 0.5, 1, 1);
           }
-          ctx.stroke();
 
-          // 4. CONTOUR LINES — jawline, brows, eyes, lips. Two passes:
-          //    fat soft outer glow + thin crisp inner stroke. Glow scales
-          //    aggressively with chaos score.
-          const drawContour = (
-            conns: Array<{ start: number; end: number }>,
-            width: number,
-          ) => {
-            // Outer glow
-            ctx.lineWidth = width + 3 + t * 4;
-            ctx.strokeStyle = chaosColor(t, 0.22 + t * 0.22);
-            ctx.shadowBlur = 14 + t * 26;
-            ctx.shadowColor = chaosColor(t, 0.95);
-            ctx.beginPath();
-            for (const c of conns) {
-              const a = lm[c.start]; const b = lm[c.end];
-              if (!a || !b) continue;
-              ctx.moveTo(a.x * w, a.y * h);
-              ctx.lineTo(b.x * w, b.y * h);
-            }
-            ctx.stroke();
-            // Crisp inner stroke
-            ctx.lineWidth = width;
-            ctx.strokeStyle = chaosColor(t, 0.98);
-            ctx.shadowBlur = 6 + t * 8;
-            ctx.stroke();
-          };
-          drawContour(FACE_OVAL, 1.2);
-          drawContour(LEFT_BROW, 1.4);
-          drawContour(RIGHT_BROW, 1.4);
-          drawContour(LEFT_EYE, 1.1);
-          drawContour(RIGHT_EYE, 1.1);
-          drawContour(LIPS, 1.3);
-
-          // 5. Pulsing landmark nodes
+          const KEY_LANDMARKS = [10, 55, 285, 1, 50, 280, 61, 291, 152, 17];
           const pulse = 0.5 + 0.5 * Math.sin(time * 3.2);
-          for (const idx of NODE_LANDMARKS) {
+          ctx.shadowColor = "rgba(74,222,128,0.85)";
+          ctx.shadowBlur = 8 + t * 6;
+          ctx.fillStyle = "rgba(74,222,128,1)";
+          for (const idx of KEY_LANDMARKS) {
             const p = lm[idx];
             if (!p) continue;
-            const x = p.x * w, y = p.y * h;
-            const r = 2.2 + pulse * 1.4 + t * 1.6;
-            ctx.shadowBlur = 12 + t * 16;
-            ctx.shadowColor = chaosColor(t, 0.9);
-            ctx.fillStyle = chaosColor(t, 0.25);
-            ctx.beginPath(); ctx.arc(x, y, r * 2.2, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = chaosColor(t, 1);
-            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(p.x * w, p.y * h, 3.5 + pulse * 0.8, 0, Math.PI * 2);
+            ctx.fill();
           }
-
           ctx.shadowBlur = 0;
 
           // 8. TF.js skin-roughness sample — runs every ~400ms on the
