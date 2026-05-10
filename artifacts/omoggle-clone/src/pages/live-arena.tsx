@@ -497,7 +497,7 @@ function VideoTile({
   const pct = Math.max(0, Math.min(100, (score / 10) * 100));
   const grad = color === "emerald" ? "from-emerald-400 to-cyan-300" : "from-violet-400 to-fuchsia-400";
   return (
-    <div className="relative min-h-[300px] overflow-hidden rounded-[20px] border border-white/14 bg-[#070914] sm:min-h-[420px]">
+    <div className="relative aspect-[3/4] min-h-[200px] overflow-hidden rounded-[20px] border border-white/14 bg-[#070914] sm:aspect-auto sm:min-h-[420px]">
       <video
         ref={videoRef}
         autoPlay
@@ -522,13 +522,13 @@ function VideoTile({
           </div>
         </div>
       )}
-      <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white">{label}</div>
-      <div className="absolute right-4 top-4 rounded-[14px] border border-white/15 bg-black/55 px-3 py-2 text-right backdrop-blur-md">
+      <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white sm:left-4 sm:top-4 sm:px-3">{label}</div>
+      <div className="absolute right-2 top-2 rounded-[12px] border border-white/15 bg-black/55 px-2.5 py-1.5 text-right backdrop-blur-md sm:right-4 sm:top-4 sm:rounded-[14px] sm:px-3 sm:py-2">
         <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/50">UNMOG</div>
-        <div className="text-3xl font-black tracking-[-0.05em] text-white">{score.toFixed(1)}</div>
+        <div className="text-2xl font-black tracking-[-0.05em] text-white sm:text-3xl">{score.toFixed(1)}</div>
       </div>
       {traits && (traits.good.length > 0 || traits.bad.length > 0) && !noFace && (
-        <div className="absolute right-3 top-20 max-w-[200px] rounded-[12px] border border-white/15 bg-black/60 p-2 backdrop-blur-md">
+        <div className="absolute right-2 top-[64px] hidden max-w-[160px] rounded-[12px] border border-white/15 bg-black/60 p-2 backdrop-blur-md sm:right-3 sm:top-20 sm:block sm:max-w-[200px]">
           {traits.bad.length > 0 && (
             <div className="mb-1.5">
               <div className="mb-1 text-[8px] font-black uppercase tracking-[0.2em] text-rose-300">Boosting</div>
