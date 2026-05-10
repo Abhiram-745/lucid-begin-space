@@ -728,14 +728,17 @@ export function scoreFromFeatures(
     { label: "Asymmetric smirk",  v: e.weirdSmile },
     { label: "Grimace",           v: e.grimace },
     { label: "Eye chaos",         v: s.eyeChaos },
+    { label: "Bug eyes / squint", v: eyePerf },
+    { label: "Mouth chaos",       v: mouthChaos },
+    { label: "Jaw / chin chaos",  v: jawChaos },
     { label: "Chin compression",  v: s.chinCompression },
     { label: "Anger",             v: e.anger },
     { label: "Surprise",          v: e.surprise },
+    { label: "Confusion",         v: e.confusion },
     { label: "Head angle",        v: s.headAngle },
     { label: "Motion instability",v: t.motionInstability },
     { label: "Asymmetry",         v: s.asymmetry },
-    { label: "Cantal deviation",  v: st.cantalDeviation },
-  ].filter((x) => x.v > 0.18).sort((x, y) => y.v - x.v).slice(0, 3);
+  ].filter((x) => x.v > 0.22).sort((x, y) => y.v - x.v).slice(0, 3);
 
   const goodChannels: Array<{ label: string; v: number }> = [
     { label: "Facial symmetry",     v: st.symmetryIdeal },
