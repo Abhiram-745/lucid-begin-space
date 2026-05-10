@@ -1,191 +1,115 @@
-## UNMOG Realtime Scoring — System Plan
+## What is currently going wrong
 
-A complete architecture for the realtime "chaos scoring" engine: webcam capture, ML feature extraction, scoring, multiplayer comparison, instant-win triggers, and persistence. All scoring runs **client-side first** for sub-100ms feedback; the backend is for sync, persistence, and matchmaking.
+1. **Funny mouth/lip faces are being suppressed**
+   - The current `genuineSmile` veto can accidentally treat a wide, symmetric silly mouth as “good”, then reduces the same mouth distortion that should raise the score.
 
----
+2. **Jawline chaos is under-detected**
+   - The scorer mostly looks for chin compression, but not enough for jaw skew, jaw jut, lower-face twisting, or side-to-side jaw displacement.
 
-### 1. High-Level Architecture
+3. **Eye chaos is too narrow**
+   - It detects wide/squinted eyes and mismatch, but does not strongly reward brow-lowering, one-eye squint, angry eyes, bug eyes, or eyebrow asymmetry together.
 
-```text
- ┌────────────────┐        WebRTC P2P (video/audio)        ┌────────────────┐
- │   Player A     │ <────────────────────────────────────> │   Player B     │
- │  (browser)     │                                        │  (browser)     │
- │                │                                        │                │
- │ Camera ─► MediaPipe FaceLandmarker ─► Feature Extractor │  (same stack)  │
- │                       │                                 │                │
- │                       ▼                                 │                │
- │                 ChaosScorer (heuristic)                 │                │
- │                       │                                 │                │
- │                       ▼                                 │                │
- │              local UNMOG_SCORE (60Hz)                   │                │
- └───────┬────────────────────────────────┬────────────────┘
-         │ score ticks (10Hz)             │ score ticks (10Hz)
-         ▼                                ▼
- ┌──────────────────────────────────────────────────────────┐
- │           Supabase Realtime (WebSocket channel)          │
- │   • match_id room, score broadcast, event bus            │
- └─────────┬────────────────────────────────────────────────┘
-           │ persist on round_end / instant_win
-           ▼
- ┌──────────────────────────────────────────────────────────┐
- │   Postgres: matches, rounds, frame_scores, highlights    │
- │   Edge Function: finalize-match (winner, ELO, clip ref)  │
- └──────────────────────────────────────────────────────────┘
-```
+4. **Live arena confidence is weaker than debug mode**
+   - `/scorer` has bounding-box confidence and partial-face gating, but `useChaosPipeline` only uses consecutive hit frames. This means live scoring can be less accurate and more unstable.
 
-Why client-first scoring: streaming raw landmarks to a server kills latency and costs. The server only sees aggregated scores + key events.
+5. **Stability can hide real performance spikes**
+   - The EMA/dead-band stops jitter, but it can also make fast weird faces feel under-rewarded. The system needs separate fast attack and slow release.
 
----
+6. **No shared diagnostic path**
+   - The debug page and arena use similar but not identical detection rules, so fixes can look good in one page and bad in another.
 
-### 2. Capture Pipeline (Frontend)
+## Fix plan
 
-- `getUserMedia({ video: {fps:30}, audio:true })` → `MediaStream`.
-- Mirror stream into:
-  - `<video>` element (display + MediaPipe input)
-  - `RTCPeerConnection` (sent to opponent)
-  - `AudioContext` analyser node (for audio features)
-- Matchmaking + signaling via Supabase Realtime channel (offer/answer/ICE).
+### Step 1: Unify face confidence and no-face handling
+- Create a shared confidence helper inside the scoring pipeline path.
+- Use the same rules in live arena and debug:
+  - full landmark set required
+  - face bounding box must be large enough
+  - partial/out-of-frame faces reduce confidence or trigger `NO FACE DETECTED`
+  - low confidence disables score/readouts
 
----
+### Step 2: Replace the smile veto with a “composed face” credit
+- Stop using `genuineSmile` to zero out mouth distortion.
+- Only lower the score when the face is genuinely calm/composed:
+  - symmetric smile
+  - low mouth distortion
+  - low eye chaos
+  - low jaw chaos
+  - low motion
+- Funny smiles, smirks, tongue/gape, lip stretching, and weird symmetric faces will still score high.
 
-### 3. ML Feature Extraction (per frame, ~30 FPS)
+### Step 3: Add stronger mouth/lip performance features
+- Add explicit channels for:
+  - lip pucker/narrow mouth
+  - wide stretched mouth
+  - open gape/tongue-out proxy
+  - lopsided mouth corners
+  - grimace/frown mouth
+- Combine these into a new `mouthChaos` score that drives high scores much harder.
 
-**Library:** `@mediapipe/tasks-vision` `FaceLandmarker` (already installed).
-- 468 landmarks + 52 ARKit-style **blendshapes** + face transformation matrix.
+### Step 4: Add stronger eye/brow performance features
+- Add explicit channels for:
+  - one-eye squint
+  - both-eyes squint
+  - bug eyes
+  - brow asymmetry
+  - angry lowered-brow expression
+  - surprise raised-brow expression
+- Combine these into a new `eyePerformance` score.
 
-**Per-frame features** (normalized 0–1 by face bounding box):
+### Step 5: Add real jaw/lower-face chaos
+- Add explicit channels for:
+  - jaw lateral skew
+  - chin tuck/compression
+  - jaw jut/protrusion proxy
+  - lower-face squash
+  - jawline asymmetry
+- Use this as a major score driver so “jawline messed up” clearly increases score.
 
-| Feature | Source | Calc |
-|---|---|---|
-| `asymmetry` | landmarks | mean abs diff of mirrored L/R landmark pairs |
-| `mouth_distortion` | mouth landmarks | (mouth width × openness) vs neutral baseline |
-| `eye_chaos` | eyelid landmarks + blendshapes | abs(eyeBlinkLeft − eyeBlinkRight) + wide-open spike |
-| `chin_compression` | jaw + neck landmarks | shrink ratio of chin→neck distance |
-| `head_angle` | transformation matrix | combined yaw+pitch+roll magnitude |
-| `brow_chaos` | browInner/Outer blendshapes | sum of brow blendshape activations |
-| `tongue_out` | `tongueOut` blendshape | direct value (huge bonus weight) |
-| `cheek_puff` | `cheekPuff` blendshape | direct value |
+### Step 6: Rebalance scoring weights
+- Make the score mostly performance-based:
+  - mouth/lips: high impact
+  - eyes/brows: high impact
+  - jaw/lower face: high impact
+  - motion/commitment: medium impact
+  - static structure/aesthetic: low impact
+- Target behavior:
+  - no face: no score/readouts
+  - neutral: 2–4
+  - composed/good-looking: 1–3
+  - mild weird face: 4–6
+  - strong silly face: 6–8
+  - extreme distortion: 8–10
 
-**Per-frame audio features** (Web Audio API `AnalyserNode`):
-- `rms_energy` — loudness
-- `pitch_variance` — autocorrelation over rolling 500ms
-- `spectral_flatness` — noisiness (screams, weird sounds)
+### Step 7: Improve responsiveness without jitter
+- Use fast attack / slow release smoothing:
+  - score rises quickly when distortion appears
+  - score falls gradually when the face relaxes
+  - tiny movement still gets ignored
+- Keep peak/commitment bonuses so sustained weird faces beat one-frame noise.
 
----
+### Step 8: Make live arena use the corrected score consistently
+- Broadcast the exact displayed local score, rounded consistently.
+- Keep opponent score as the received broadcast value so both screens match.
+- Ensure no-face broadcasts `0` plus no active readouts.
 
-### 4. Temporal Layer (rolling buffer, ~60 frames = 2s)
+### Step 9: Add temporary debug visibility for tuning
+- Log or expose the main channels during testing:
+  - mouth chaos
+  - eye performance
+  - jaw chaos
+  - emotion intensity
+  - confidence
+  - final target score
+- This makes it obvious which facial movement is not being detected.
 
-For each feature, maintain:
-- **velocity** = |x(t) − x(t−1)|
-- **volatility** = std-dev over window
-- **commitment** = fraction of frames in window where intensity > 0.6
-
-Derived signals:
-- `motion_instability` = mean velocity of all landmarks (head movement chaos)
-- `expression_volatility` = mean volatility across blendshapes
-- `sustain_bonus` = commitment × peak_intensity (rewards holding the bit)
-
----
-
-### 5. Scoring Function
-
-```text
-raw = w1·asymmetry        + w2·mouth_distortion  + w3·eye_chaos
-    + w4·chin_compression + w5·head_angle        + w6·brow_chaos
-    + w7·tongue_out       + w8·cheek_puff
-    + w9·motion_instability + w10·expression_volatility
-    + w11·audio_energy    + w12·pitch_variance
-    + w13·sustain_bonus
-
-UNMOG_SCORE = smooth(exaggerate(clamp(raw, 0, 1)))  × 1000
-```
-
-- **smooth**: EMA, α≈0.25 (responsive but not jittery)
-- **exaggerate**: `pow(x, 0.7)` so mid-range looks rewarding on screen
-- Suggested weights heavily favor `tongue_out`, `chin_compression`, `cheek_puff`, `sustain_bonus` — these are the visually committed bits.
-
-Output cadence: compute at 30Hz, broadcast at 10Hz.
-
----
-
-### 6. Instant-Win Triggers
-
-Run a parallel **Event Detector** on each player's local pipeline:
-
-| Trigger | Detection | Result |
-|---|---|---|
-| **Opponent laugh** | sustained `mouthSmile` blendshape > 0.7 for ≥800ms **AND** opponent audio RMS spike > threshold | Other player instant win, +500 bonus |
-| **Look-away / leave frame** | no face detected ≥ 2s | Forfeit |
-| **Mega-chaos combo** | ≥4 features simultaneously > 0.8 for 1s | "MEGA UNMOG" 2× multiplier for 3s |
-| **Double chin lock-in** | chin_compression > 0.85 for 1.5s | +200 bonus, screen-shake FX |
-
-Each player detects their **opponent's** laugh from the incoming WebRTC video (run a second, lighter FaceLandmarker on the remote `<video>` element). This avoids self-reporting cheating.
-
----
-
-### 7. Multiplayer & Realtime Sync
-
-**Supabase Realtime channel** `match:{match_id}`:
-
-Broadcast events (client → channel → opponent + server listener):
-- `score_tick` `{ player_id, score, features_summary, t }` — 10Hz
-- `instant_win` `{ winner_id, reason }`
-- `round_start`, `round_end`
-- `forfeit`
-
-Presence: tracks both players connected; auto-end on disconnect.
-
----
-
-### 8. Persistence (Supabase Postgres)
-
-Tables (RLS on every one):
-- `matches` — players (uuid[]), started_at, ended_at, winner_id, mode
-- `rounds` — match_id, round_number, duration, winner_id, final_scores (jsonb)
-- `frame_scores` — round_id, player_id, t_ms, score (downsampled to 5Hz to keep volume sane)
-- `highlights` — round_id, player_id, t_ms, type ('mega_unmog'|'double_chin'|'laugh_trigger'), clip_url
-- `player_stats` — user_id, elo, wins, losses, peak_score
-- `user_roles` — separate table per security guidelines
-
-**ELO update**: standard ELO with K=32 in `finalize-match` Edge Function called on `round_end`.
-
-**Clip storage**: client records last 5s of local canvas via `MediaRecorder` on highlight events → uploads webm to Supabase Storage bucket `highlights/`.
-
----
-
-### 9. Edge Functions
-
-- `finalize-match` — validates final scores from both clients (sanity-check vs broadcast history), writes winner, updates ELO.
-- `matchmaker` — pairs waiting players from a `queue` table, creates match row, returns match_id + signaling channel.
-- `report-cheat` — flags impossible score curves (e.g. constant 1.0).
-
----
-
-### 10. Anti-Cheat / Sanity
-
-- Server only trusts the **opponent-reported** instant-win for laugh detection (cross-validation).
-- Reject final scores if score curve never dips, or if features arrive without matching landmark hashes.
-- Min 5 face-detected frames per second required, else mark frames invalid.
-
----
-
-### 11. Build Order
-
-1. **Scorer module** (already exists at `src/lib/chaos-scorer.ts`) — extend with full feature set + temporal buffer.
-2. **Opponent-face analyzer** for laugh detection on remote video.
-3. **Supabase tables + RLS + realtime channel**.
-4. **Matchmaking queue + signaling**.
-5. **Live arena page** wiring scorer → channel → UI scoreboards + instant-win FX.
-6. **Highlight recorder + upload**.
-7. **`finalize-match` Edge Function + ELO**.
-8. **Leaderboard reads from `player_stats`**.
-
----
-
-### Technical Notes
-
-- All ML stays in-browser (`@mediapipe/tasks-vision` WASM + GPU delegate). No server inference, no per-frame upload.
-- Score broadcast is throttled to 10Hz to stay well under Supabase Realtime limits (~100 msgs/s/channel).
-- `frame_scores` table is for replay/debug only; do not store landmark data (privacy + size).
-- Heuristic weights live in a single `SCORING_WEIGHTS` constant so they can be tuned without touching logic — this is the "tuning surface" that replaces a trained model in v1.
-- v2 upgrade path: log `(features[], reaction_score)` pairs from real matches → train a small MLP that outputs a single chaos probability, swap in behind the same `ChaosScorer` interface.
+### Step 10: Validate against the expected cases
+- Test these scenarios in `/scorer` and `/arena/1v1`:
+  - neutral face stays low/stable
+  - composed smile does not spike
+  - angry face scores higher
+  - one-eye squint scores higher
+  - lip pucker/wide mouth scores higher
+  - jaw tuck/skew scores higher
+  - face out of frame shows no-face state
+  - held same face does not fluctuate heavily

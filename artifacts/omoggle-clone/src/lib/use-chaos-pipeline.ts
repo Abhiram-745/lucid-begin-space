@@ -112,19 +112,34 @@ export function useChaosPipeline(opts: PipelineOptions): PipelineState {
       try {
         const result = landmarker.detectForVideo(video, performance.now());
         const lm = result.faceLandmarks?.[0];
-        const detected = !!(lm && lm.length > 400);
+        // Compute bbox area to gauge how much of the frame the face occupies.
+        let bboxArea = 0;
+        if (lm && lm.length > 400) {
+          let xMin = 1, yMin = 1, xMax = 0, yMax = 0;
+          for (const p of lm) {
+            if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x;
+            if (p.y < yMin) yMin = p.y; if (p.y > yMax) yMax = p.y;
+          }
+          bboxArea = Math.max(0, (xMax - xMin) * (yMax - yMin));
+        }
+        const detected = !!(lm && lm.length > 400 && bboxArea > 0.006);
         if (detected) {
           missFramesRef.current = 0;
           hitFramesRef.current = Math.min(30, hitFramesRef.current + 1);
           // Require 3 consecutive hits before declaring face present.
           if (hitFramesRef.current >= 3) setHasFace(true);
 
-          // Confidence ramps up with stable detections (warm-up ~6 frames).
-          const confidence = Math.min(1, hitFramesRef.current / 6);
           const spatial = extractSpatial(lm as any);
           const emotion = extractEmotion(lm as any);
           const structure = extractStructure(lm as any);
           const temp = temporal.current.update(spatial, lm as any);
+
+          // Confidence: warm-up + bbox size − motion penalty. Floor 0.5
+          // so a normal-distance face is never crushed.
+          const warmup = Math.min(1, hitFramesRef.current / 6);
+          const sizeConf = Math.min(1, bboxArea / 0.07);
+          const motionPenalty = Math.min(0.22, temp.motionInstability * 0.28);
+          const confidence = Math.max(0.5, Math.min(warmup, sizeConf) - motionPenalty);
 
           // audio
           let audio = { energy: 0, pitchVariation: 0, spectralEntropy: 0, spike: 0 };
