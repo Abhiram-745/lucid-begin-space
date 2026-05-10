@@ -37,11 +37,16 @@ Deno.serve(async (req) => {
     }
     const userId = userData.user.id;
 
-    // Look for an existing waiting opponent (not self).
+    // Drop stale entries (older than 25s) so dead clients can't ghost-match.
+    const staleCutoff = new Date(Date.now() - 25_000).toISOString();
+    await admin.from("matchmaking_queue").delete().lt("joined_at", staleCutoff);
+
+    // Look for an existing waiting opponent (not self), recent only.
     const { data: waiters } = await admin
       .from("matchmaking_queue")
       .select("user_id, joined_at")
       .neq("user_id", userId)
+      .gte("joined_at", staleCutoff)
       .order("joined_at", { ascending: true })
       .limit(1);
 
