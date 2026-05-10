@@ -7,19 +7,8 @@ import { PageShell } from "@/components/page-shell";
 type CheckStep = "preparing" | "align" | "blink" | "turn" | "done";
 const STEPS: CheckStep[] = ["align", "blink", "turn", "done"];
 
-// Key landmark indices to render as dots (matches reference screenshot)
-const KEY_LANDMARKS = [
-  10,   // forehead center
-  33,   // left eye inner corner
-  133,  // left eye outer corner
-  362,  // right eye inner corner
-  263,  // right eye outer corner
-  49,   // left nose wing
-  279,  // right nose wing
-  61,   // mouth left corner
-  291,  // mouth right corner
-  152,  // chin
-];
+// MediaPipe face mesh tessellation connections (drawn as a green wireframe)
+const TESSELATION = FaceLandmarker.FACE_LANDMARKS_TESSELATION as ReadonlyArray<{ start: number; end: number }>;
 
 export default function CameraCheck() {
   const [, setLocation] = useLocation();
@@ -125,32 +114,29 @@ export default function CameraCheck() {
         const faces = result.faceLandmarks;
         if (faces && faces.length > 0) {
           const landmarks = faces[0];
-          const dotColor = isDone ? "#4ade80" : "#4ade80";
-          const glowColor = isDone ? "rgba(74,222,128,0.6)" : "rgba(74,222,128,0.5)";
+          const meshColor = isDone ? "rgba(74,222,128,0.85)" : "rgba(74,222,128,0.7)";
 
           // Mirror transform (video is -scale-x-100)
           ctx.save();
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
 
-          KEY_LANDMARKS.forEach((idx) => {
-            const pt = landmarks[idx];
-            if (!pt) return;
-            const x = pt.x * canvas.width;
-            const y = pt.y * canvas.height;
-
-            // Glow
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = glowColor;
-            ctx.fill();
-
-            // Dot
-            ctx.beginPath();
-            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
-            ctx.fillStyle = dotColor;
-            ctx.fill();
-          });
+          // Draw tessellation wireframe
+          ctx.strokeStyle = meshColor;
+          ctx.lineWidth = 0.6;
+          ctx.shadowColor = "rgba(74,222,128,0.55)";
+          ctx.shadowBlur = 4;
+          ctx.beginPath();
+          for (let i = 0; i < TESSELATION.length; i++) {
+            const c = TESSELATION[i];
+            const a = landmarks[c.start];
+            const b = landmarks[c.end];
+            if (!a || !b) continue;
+            ctx.moveTo(a.x * canvas.width, a.y * canvas.height);
+            ctx.lineTo(b.x * canvas.width, b.y * canvas.height);
+          }
+          ctx.stroke();
+          ctx.shadowBlur = 0;
 
           ctx.restore();
         }
