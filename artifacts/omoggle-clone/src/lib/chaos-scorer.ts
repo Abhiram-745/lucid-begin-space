@@ -609,13 +609,25 @@ export function scoreFromFeatures(
   // ---- 1. MOUTH CHAOS bucket -------------------------------------------
   // Anything weird the mouth/lips can do. Genuine symmetric smiles do NOT
   // veto this anymore — they're handled later via a "composed face" credit.
-  const mouthChaos = clamp01(
+  //
+  // TALKING DAMPER: if the mouth is moving (volatility) but the rest of the
+  // face (eyes, jaw, asymmetry, head) is calm, the user is almost certainly
+  // just speaking. Speech causes rapid mouth open/close that otherwise
+  // hallucinates as "chaos". We attenuate the mouth bucket in that case.
+  const restCalm = 1 - clamp01(
+    0.5 * s.eyeChaos + 0.5 * s.asymmetry + 0.4 * s.chinCompression + 0.4 * s.headAngle,
+  );
+  const talkingLikely = clamp01(
+    t.expressionVolatility * 0.7 + s.mouthDistortion * 0.5,
+  ) * restCalm;
+  const talkDamp = 1 - 0.65 * talkingLikely; // up to 65% reduction while talking
+  const mouthChaos = clamp01((
     0.45 * s.mouthDistortion +
     0.30 * e.tongueOut +
     0.22 * e.weirdSmile +
     0.18 * e.grimace +
-    0.12 * s.teethExposure,
-  );
+    0.12 * s.teethExposure
+  ) * talkDamp);
 
   // ---- 2. EYE / BROW PERFORMANCE bucket --------------------------------
   // Wide bug-eyes, hard squints, lopsided eyes, raised/lowered brows.
@@ -687,18 +699,19 @@ export function scoreFromFeatures(
   const target01 = sigmoid01(adjusted, 6.0, 0.28) * conf;
   const targetScore = target01 * 10;
 
-  // ---- 9. Fast attack / fast-enough release ----------------------------
-  // Going UP: respond fast so weird faces are felt instantly.
-  // Going DOWN: also respond quickly so the score doesn't stay pinned high
-  // after the user returns to a neutral face. A tiny deadband (±0.05)
-  // prevents single-frame jitter without trapping the score.
+  // ---- 9. Smoothing — damp jitter, keep responsiveness -----------------
+  // Symmetric EMA on small deltas, faster catch-up on large ones. A wider
+  // deadband (±0.18) absorbs talking-driven micro-fluctuations without
+  // killing the response to real expression changes.
   let score: number;
   const diff = targetScore - prevScore;
-  if (Math.abs(diff) < 0.05) {
+  const absDiff = Math.abs(diff);
+  if (absDiff < 0.18) {
     score = prevScore;
   } else {
-    const alpha = diff > 0 ? 0.55 : 0.42;
-    const maxJump = diff > 0 ? 3.0 : 3.0;
+    // Slower base alpha = smoother. Big jumps still catch up via maxJump.
+    const alpha = diff > 0 ? 0.32 : 0.30;
+    const maxJump = 2.5;
     const clampedDelta = Math.max(-maxJump, Math.min(maxJump, diff));
     score = prevScore + alpha * clampedDelta;
   }
