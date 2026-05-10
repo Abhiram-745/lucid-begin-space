@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, CircleHelp, Trophy, User, X, Gamepad2, ChevronRight } from "lucide-react";
-import { Link } from "wouter";
+import { ChevronLeft, CircleHelp, Trophy, User, X, Gamepad2, ChevronRight, Camera, Upload } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 type LobbyCardProps = {
   icon: ReactNode;
@@ -12,6 +12,7 @@ type LobbyCardProps = {
   featured?: boolean;
   extra?: ReactNode;
   href?: string;
+  onClick?: () => void;
 };
 
 type RuleCardProps = {
@@ -146,6 +147,43 @@ function HowToUnmogModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function ProfilePhotoGate({ onClose, onContinue }: { onClose: () => void; onContinue: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-3 py-3 backdrop-blur-sm">
+      <div className="relative w-full max-w-[460px] rounded-[20px] border border-purple-500/70 bg-[#070713] p-7 text-center shadow-[0_0_60px_rgba(168,85,247,0.32)]">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-white/45 transition hover:text-white"
+          aria-label="Close"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-purple-400/55 bg-purple-950/40 shadow-[0_0_28px_rgba(168,85,247,0.4)]">
+          <Camera className="h-9 w-9 text-purple-300" strokeWidth={1.6} />
+        </div>
+        <h2 className="text-[22px] font-black uppercase italic leading-tight text-white">
+          Add Your Profile Photo
+        </h2>
+        <p className="mx-auto mt-3 max-w-[340px] text-[12px] font-bold leading-[1.45] text-white/55">
+          A profile photo is required to enter the 1v1 Arena. Opponents need to know who they're unmogging.
+        </p>
+        <button
+          onClick={onContinue}
+          className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-[10px] border border-purple-400/70 bg-gradient-to-b from-purple-600 to-purple-700 px-5 text-[13px] font-black uppercase tracking-[0.18em] text-white shadow-[0_0_28px_rgba(168,85,247,0.45)] transition hover:from-purple-500 hover:to-purple-600"
+        >
+          <Upload className="h-4 w-4" /> Upload Photo
+        </button>
+        <button
+          onClick={onClose}
+          className="mt-3 text-[10px] font-black uppercase tracking-[0.22em] text-white/40 transition hover:text-white/70"
+        >
+          Maybe Later
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PlayerRankCard({ featured = false }: { featured?: boolean }) {
   return (
     <div
@@ -214,6 +252,7 @@ function LobbyPanel({
   featured = false,
   extra,
   href,
+  onClick,
 }: LobbyCardProps) {
   const content = (
     <section
@@ -259,6 +298,14 @@ function LobbyPanel({
     </section>
   );
 
+  if (onClick) {
+    return (
+      <button onClick={onClick} className="block h-full min-w-0 cursor-pointer text-left">
+        {content}
+      </button>
+    );
+  }
+
   if (!href) return content;
 
   return (
@@ -270,6 +317,8 @@ function LobbyPanel({
 
 export default function Arena() {
   const [showHowToUnmog, setShowHowToUnmog] = useState(false);
+  const [showPhotoGate, setShowPhotoGate] = useState(false);
+  const [, navigate] = useLocation();
   const panels: LobbyCardProps[] = [
     {
       icon: <Trophy className="h-16 w-16 fill-amber-400/35 text-amber-400" strokeWidth={1.6} />,
@@ -288,7 +337,7 @@ export default function Arena() {
       hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(168,85,247,0.82),rgba(34,211,238,0.32)_44%,rgba(168,85,247,0.1)_70%,transparent_84%)]",
       hoverBorder: "hover:border-purple-400/90 hover:shadow-[0_0_76px_rgba(168,85,247,0.3),inset_0_1px_0_rgba(255,255,255,0.12)]",
       featured: true,
-      href: "/arena/1v1",
+      onClick: () => setShowPhotoGate(true),
       extra: <PlayerRankCard featured />,
     },
     {
@@ -395,6 +444,15 @@ export default function Arena() {
         </div>
       </main>
       {showHowToUnmog && <HowToUnmogModal onClose={() => setShowHowToUnmog(false)} />}
+      {showPhotoGate && (
+        <ProfilePhotoGate
+          onClose={() => setShowPhotoGate(false)}
+          onContinue={() => {
+            setShowPhotoGate(false);
+            navigate("/arena/1v1");
+          }}
+        />
+      )}
     </div>
   );
 }
