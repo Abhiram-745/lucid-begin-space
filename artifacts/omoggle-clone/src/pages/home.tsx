@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { PageShell } from "@/components/page-shell";
-import { Swords, ChevronRight } from "lucide-react";
+import { Swords, ChevronRight, Trophy, MessageCircle } from "lucide-react";
 import { Link } from "wouter";
 
 const STEPS = [
@@ -122,6 +122,44 @@ export default function Home() {
             </Fragment>
           ))}
         </div>
+
+        {/* Secondary CTAs — Leaderboard + Discord */}
+        <div className="mt-8 grid w-full max-w-5xl grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2">
+          <Link
+            href="/leaderboard"
+            className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-[#0f0f0f]/85 to-[#0f0f0f]/85 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/55 hover:shadow-[0_18px_44px_-12px_rgba(245,158,11,0.45)]"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-950/40">
+              <Trophy className="h-5 w-5 text-amber-300" strokeWidth={2.2} aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200/90">View Leaderboard</div>
+              <div className="mt-1 text-[12px] text-white/45">See top players and rankings.</div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-transform group-hover:translate-x-1" strokeWidth={2.5} />
+          </Link>
+
+          <a
+            href="https://discord.gg"
+            target="_blank"
+            rel="noreferrer"
+            className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-950/50 via-[#0f0f0f]/85 to-[#0f0f0f]/85 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-400/55 hover:shadow-[0_18px_44px_-12px_rgba(99,102,241,0.5)]"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-indigo-500/30 bg-indigo-950/50">
+              <MessageCircle className="h-5 w-5 text-indigo-300" strokeWidth={2.2} aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-200/90">Join Discord</div>
+              <div className="mt-1 text-[12px] text-white/45">Chat, events &amp; updates.</div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-transform group-hover:translate-x-1" strokeWidth={2.5} />
+          </a>
+        </div>
+
+        {/* Footer micro-copy */}
+        <p className="mt-12 text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-white/25 sm:mt-14">
+          Anti-abuse session gate · 18+ acknowledgment · Not legal ID verification
+        </p>
       </main>
     </PageShell>
   );

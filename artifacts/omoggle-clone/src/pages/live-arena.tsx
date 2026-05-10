@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronLeft, OctagonX, Radar, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi, Check, X } from "lucide-react";
+import { ChevronLeft, ScanFace, Zap, Skull, Smile, AlertOctagon, Wifi, Check, X, Hexagon } from "lucide-react";
 import { useChaosPipeline } from "@/lib/use-chaos-pipeline";
 import { EventDetector, type InstantEvent } from "@/lib/instant-win";
 import { useMultiplayer } from "@/lib/use-multiplayer";
@@ -302,37 +302,60 @@ function SearchingScreen({
 }: { status: string; cameraReady: boolean; cameraError: string; errorMsg: string }) {
   const label =
     cameraError ? "Camera blocked" :
-    status === "auth" ? "Signing in" :
-    status === "queueing" ? "Joining queue" :
-    status === "waiting" ? "Waiting for opponent" :
-    status === "connecting" ? "Connecting" :
+    status === "auth" ? "Signing in…" :
+    status === "queueing" ? "Searching…" :
+    status === "waiting" ? "Waiting for opponent…" :
+    status === "connecting" ? "Connecting…" :
     status === "error" ? "Error" :
-    "Preparing";
-  const subtitle =
-    cameraError || errorMsg ||
-    (status === "waiting" ? "Open another browser window to test 1v1." : "");
+    "Preparing…";
+  const tagline = cameraError || errorMsg || "Good lighting beats a good camera.";
+
+  const handleFindNew = () => {
+    if (typeof window !== "undefined") window.location.reload();
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-black font-mono text-white">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(8,22,28,0.88),rgba(8,8,12,1)_45%,rgba(21,10,25,0.96))]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(120,40,90,0.25),transparent_55%)]" />
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-10">
-        <Link href="/arena" className="absolute left-6 top-6 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-white/50 hover:text-white">
-          <ChevronLeft className="h-4 w-4" /> Back
-        </Link>
-        <div className="w-full max-w-[560px] rounded-[36px] border border-cyan-100/20 bg-white/[0.045] p-8 text-center backdrop-blur-md">
-          <div className="mx-auto mb-9 flex h-28 w-28 items-center justify-center rounded-full border border-cyan-100/20 bg-black shadow-[0_0_80px_rgba(34,211,238,0.14)]">
-            {cameraError ? <ScanFace className="h-12 w-12 text-red-300" /> : <Radar className="h-12 w-12 animate-pulse text-cyan-200" />}
+        {/* Hex spinner */}
+        <div className="relative mb-10 h-[100px] w-[100px]">
+          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.06),transparent_70%)] blur-xl" />
+          <div className="absolute inset-0 animate-spin [animation-duration:6s]">
+            <Hexagon className="h-full w-full text-white/15" strokeWidth={1.2} />
           </div>
-          <div className="text-xs font-black uppercase tracking-[0.34em] text-cyan-200">Matchmaking</div>
-          <h1 className="mt-5 text-4xl font-black uppercase tracking-[0.16em] text-white">{label}</h1>
-          <div className="mt-6 min-h-[24px] text-xs font-black uppercase tracking-[0.18em] text-white/50">{subtitle}</div>
-          <div className="mt-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/35">
-            Camera: {cameraReady ? "Live" : "Pending"}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Hexagon className="h-9 w-9 fill-white/85 text-white/85" strokeWidth={1.2} />
           </div>
-          <Link href="/arena" className="mt-10 inline-flex h-14 min-w-[190px] items-center justify-center gap-3 rounded-full border border-white/12 bg-white/5 px-8 text-sm font-black uppercase tracking-[0.2em] text-white/62 hover:bg-red-500/10 hover:text-red-200">
-            <OctagonX className="h-5 w-5" /> Abort
+        </div>
+
+        <h1 className="mb-3 text-2xl font-black uppercase tracking-[0.34em] text-white sm:text-[28px]">
+          {label.toUpperCase()}
+        </h1>
+        <p className="mb-10 max-w-md text-center text-[12px] uppercase tracking-[0.18em] text-white/40">
+          {tagline}
+        </p>
+
+        <div className="flex w-full max-w-[280px] flex-col gap-3">
+          <button
+            onClick={handleFindNew}
+            className="h-12 w-full rounded-md border border-cyan-400/30 bg-cyan-950/30 text-[11px] font-black uppercase tracking-[0.28em] text-cyan-200 transition-all hover:border-cyan-300/60 hover:bg-cyan-900/40 hover:text-cyan-100"
+          >
+            Find New Match
+          </button>
+          <Link
+            href="/arena"
+            className="flex h-12 w-full items-center justify-center rounded-md border border-white/15 bg-white/[0.03] text-[11px] font-black uppercase tracking-[0.28em] text-white/70 transition-all hover:border-white/30 hover:bg-white/[0.06] hover:text-white"
+          >
+            Return to Menu
           </Link>
         </div>
+
+        {(cameraError || errorMsg) && (
+          <div className="mt-8 max-w-md text-center text-[10px] uppercase tracking-[0.22em] text-red-300/70">
+            {cameraError || errorMsg}
+          </div>
+        )}
       </main>
     </div>
   );

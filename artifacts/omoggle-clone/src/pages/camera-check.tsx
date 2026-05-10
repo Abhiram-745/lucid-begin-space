@@ -216,10 +216,10 @@ export default function CameraCheck() {
 
           {/* Header */}
           <div className="px-8 pt-12 pb-6 text-center">
-            <h1 className="rebel-heading text-[27px] uppercase tracking-[0.28em] text-purple-200 mb-3 drop-shadow-[0_0_22px_rgba(216,180,254,0.4)]">
+            <h1 className="rebel-heading text-[27px] uppercase tracking-[0.28em] text-white mb-3 drop-shadow-[0_0_22px_rgba(255,255,255,0.18)]">
               Camera Access Check
             </h1>
-            <p className="text-[13px] uppercase tracking-[0.42em] text-white/25">
+            <p className="text-[12px] uppercase tracking-[0.42em] text-white/35">
               Short-lived session challenge
             </p>
           </div>
@@ -296,9 +296,13 @@ export default function CameraCheck() {
 
             {/* Preparing overlay */}
             {step === "preparing" && (
-              <div className="absolute inset-0 flex items-center justify-center" style={{ zIndex: 20 }}>
-                <p className="text-white/40 text-xs uppercase tracking-widest animate-pulse">
-                  Preparing session...
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-5" style={{ zIndex: 20 }}>
+                <div className="h-12 w-12 rounded-full border-2 border-cyan-400/25 border-t-cyan-300 animate-spin" />
+                <p className="text-cyan-300 text-[12px] uppercase tracking-[0.28em] font-bold">
+                  Requesting camera access…
+                </p>
+                <p className="text-cyan-300/35 text-[10px] uppercase tracking-[0.3em]">
+                  Mediapipe Face Landmarker · WASM + GPU
                 </p>
               </div>
             )}
@@ -308,7 +312,7 @@ export default function CameraCheck() {
           <div className="mx-8 mb-2">
             <div className="h-px bg-white/10 rounded-full overflow-hidden">
               <motion.div
-                className="h-full bg-purple-500"
+                className="h-full bg-cyan-400"
                 animate={{ width: isDone ? "100%" : `${(activeStepIndex / (STEPS.length - 1)) * 100}%` }}
                 transition={{ duration: 0.5 }}
               />
@@ -322,9 +326,9 @@ export default function CameraCheck() {
                 key={s}
                 className={`text-[11px] uppercase tracking-[0.14em] font-bold transition-colors duration-300 ${
                   isDone || i < activeStepIndex
-                    ? "text-purple-400"
+                    ? "text-cyan-400"
                     : i === activeStepIndex
-                    ? "text-purple-200"
+                    ? "text-cyan-300"
                     : "text-white/20"
                 }`}
               >
