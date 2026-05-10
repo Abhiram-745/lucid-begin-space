@@ -684,17 +684,18 @@ export function scoreFromFeatures(
   const target01 = sigmoid01(adjusted, 6.0, 0.28) * conf;
   const targetScore = target01 * 10;
 
-  // ---- 9. Fast attack / slow release + dead-band -----------------------
-  // Going UP: respond fast (alpha 0.55) so weird faces are felt instantly.
-  // Going DOWN: ease out (alpha 0.18) so brief still-frames don't crash
-  // the score. Tiny moves under ±0.20 hold the previous value.
+  // ---- 9. Fast attack / fast-enough release ----------------------------
+  // Going UP: respond fast so weird faces are felt instantly.
+  // Going DOWN: also respond quickly so the score doesn't stay pinned high
+  // after the user returns to a neutral face. A tiny deadband (±0.05)
+  // prevents single-frame jitter without trapping the score.
   let score: number;
   const diff = targetScore - prevScore;
-  if (Math.abs(diff) < 0.20) {
+  if (Math.abs(diff) < 0.05) {
     score = prevScore;
   } else {
-    const alpha = diff > 0 ? 0.55 : 0.18;
-    const maxJump = diff > 0 ? 3.0 : 1.2;
+    const alpha = diff > 0 ? 0.55 : 0.42;
+    const maxJump = diff > 0 ? 3.0 : 3.0;
     const clampedDelta = Math.max(-maxJump, Math.min(maxJump, diff));
     score = prevScore + alpha * clampedDelta;
   }
