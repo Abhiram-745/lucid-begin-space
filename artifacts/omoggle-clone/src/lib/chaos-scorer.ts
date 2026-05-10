@@ -594,113 +594,107 @@ export function scoreFromFeatures(
     };
   }
   // ============================================================
-  // UNMOG SCORING v2 — REVERSED LOOKSMAXX MODEL
-  // ------------------------------------------------------------
-  //   aesthetic / ideal  →  LOW score (1–3)
-  //   neutral resting    →  2–4
-  //   distorted / silly  →  HIGH score (6–10)
-  //
-  // Composition:  performance (75%) + structural deviation (25%)
-  // Pipeline:     deadzone → weighted sum → sigmoid → 0..10
-  //               then symmetric EMA + dead-band for stability
+  // UNMOG SCORING v3 — PERFORMANCE-FIRST
+  //   aesthetic / composed → 1–3
+  //   neutral resting      → 2–4
+  //   mild silly           → 4–6
+  //   strong performance   → 6–8
+  //   extreme distortion   → 8–10
+  // Pipeline: bucket (mouth/eye/jaw/emotion) → weighted sum
+  //           → sigmoid → 0..10 → fast attack / slow release
   // ============================================================
-
-  // ---- 0. Confidence gating ---------------------------------------------
   const conf = conf0;
-
-  // ---- 1. Dead-zoned channels (kill micro-jitter) -----------------------
   const dz = (v: number, th = 0.06) => deadzone(v, th);
 
-  // Performance: distortion = mouth contortion + tongue + weird/asymmetric
-  // smile + grimace, all vetoed when a genuine symmetric smile is present
-  // (so a happy face doesn't accidentally count as ugly).
-  const genuineVeto = clamp01(1 - e.genuineSmile * 1.4);
-  const distortionRaw =
-    0.34 * s.mouthDistortion * genuineVeto +
-    0.20 * e.tongueOut +
-    0.14 * e.weirdSmile +
-    0.12 * e.grimace +
-    0.08 * s.teethExposure * genuineVeto +
-    // emotional performance — anger / surprise / exaggeration push score UP
-    0.12 * Math.max(e.anger, e.surprise, e.exaggeration) * genuineVeto;
-  const distortion = dz(clamp01(distortionRaw), 0.08);
+  // ---- 1. MOUTH CHAOS bucket -------------------------------------------
+  // Anything weird the mouth/lips can do. Genuine symmetric smiles do NOT
+  // veto this anymore — they're handled later via a "composed face" credit.
+  const mouthChaos = clamp01(
+    0.45 * s.mouthDistortion +
+    0.30 * e.tongueOut +
+    0.22 * e.weirdSmile +
+    0.18 * e.grimace +
+    0.12 * s.teethExposure,
+  );
 
-  const eyeChaos      = dz(s.eyeChaos, 0.08);
-  const chin          = dz(s.chinCompression, 0.08);
-  const motion        = dz(t.motionInstability, 0.05);
-  const volatility    = dz(t.expressionVolatility, 0.05);
-  const commitment    = dz(t.commitment, 0.10);
-  const headAngle     = dz(s.headAngle, 0.10);
+  // ---- 2. EYE / BROW PERFORMANCE bucket --------------------------------
+  // Wide bug-eyes, hard squints, lopsided eyes, raised/lowered brows.
+  const eyePerf = clamp01(
+    0.55 * s.eyeChaos +
+    0.35 * e.surprise +    // wide eyes + raised brow
+    0.30 * e.anger +       // lowered brow + tense
+    0.30 * e.confusion +   // asym brow + squint
+    0.22 * e.exaggeration,
+  );
 
-  // Structural channels (low impact)
-  const asymmetry       = dz(s.asymmetry, 0.06);
-  const ratioDeviation  = dz(st.ratioDeviation, 0.06);
-  const cantalDeviation = dz(st.cantalDeviation, 0.06);
+  // ---- 3. JAW / LOWER-FACE bucket --------------------------------------
+  // Chin tuck, jaw skew, head twist, overall jawline asymmetry.
+  const jawChaos = clamp01(
+    0.55 * s.chinCompression +
+    0.35 * s.asymmetry +
+    0.30 * s.headAngle,
+  );
 
-  // ---- 2. PERFORMANCE BLOCK (75%) ---------------------------------------
-  // Silly-face emotional bonus — anger/surprise/confusion all increase score.
-  const emoBonus = clamp01(
-    0.45 * e.anger +
-    0.30 * e.surprise +
-    0.25 * e.confusion +
-    0.30 * e.exaggeration,
-  ) * genuineVeto;
+  // ---- 4. TEMPORAL bucket ----------------------------------------------
+  const tempo = clamp01(
+    0.40 * t.motionInstability +
+    0.30 * t.expressionVolatility +
+    0.40 * t.commitment +
+    0.25 * t.peak,
+  );
 
-  const performance =
-    0.22 * distortion +
-    0.15 * eyeChaos +
-    0.20 * chin +
-    0.10 * motion +
-    0.09 * volatility +
-    0.12 * commitment +
-    0.16 * dz(emoBonus, 0.08);
+  // ---- 5. Structural deviation (small static contribution) -------------
+  const structural = clamp01(
+    0.40 * st.ratioDeviation +
+    0.35 * st.cantalDeviation +
+    0.25 * (1 - st.symmetryIdeal),
+  );
 
-  // ---- 3. STRUCTURAL DEVIATION (25%) ------------------------------------
-  const structural =
-    0.40 * asymmetry +
-    0.25 * ratioDeviation +
-    0.35 * cantalDeviation;
-
-  // ---- 4. COMPOSITE -----------------------------------------------------
-  // Tiny head-angle bonus — awkward angles add a touch of chaos.
+  // ---- 6. Composite — performance dominates ----------------------------
+  // Weights tuned so a single bucket maxed out → ~6, two maxed → ~8,
+  // three+ maxed → ~9-10.
   const composite = clamp01(
-    0.75 * performance +
-    0.25 * structural +
-    0.05 * headAngle,
+    0.34 * dz(mouthChaos, 0.08) +
+    0.26 * dz(eyePerf,   0.08) +
+    0.26 * dz(jawChaos,  0.08) +
+    0.10 * dz(tempo,     0.08) +
+    0.08 * dz(structural,0.06)
   );
 
-  // Aesthetic credit: small subtraction for a clean, symmetric, well-
-  // proportioned face so "good looks" land in 1–3 instead of 2–4.
-  const aesthetic = clamp01(
-    0.45 * st.symmetryIdeal +
-    0.30 * (1 - st.ratioDeviation) +
-    0.25 * (1 - st.cantalDeviation),
+  // ---- 7. Composed-face credit (subtractive, replaces smile veto) ------
+  // Only fires when the WHOLE face is calm — symmetric, low distortion,
+  // low motion, no weird mouth or eye signals. Pulls "good looking" faces
+  // down into 1–3.
+  const calmness = clamp01(
+    1
+    - 1.3 * mouthChaos
+    - 1.0 * eyePerf
+    - 1.0 * jawChaos
+    - 0.8 * t.motionInstability
+    - 0.6 * t.expressionVolatility
   );
-  const adjusted = clamp01(composite - 0.10 * aesthetic);
+  const composed = clamp01(
+    0.50 * calmness +
+    0.30 * st.symmetryIdeal +
+    0.20 * (1 - st.ratioDeviation)
+  );
+  const adjusted = clamp01(composite - 0.12 * composed);
 
-  // ---- 5. Sigmoid → 0..10 -----------------------------------------------
-  // Tuned so:
-  //   composite ≈ 0.05 (ideal)    → ~1.5
-  //   composite ≈ 0.12 (neutral)  → ~2.6
-  //   composite ≈ 0.30 (mild)     → ~5.0
-  //   composite ≈ 0.50 (strong)   → ~7.4
-  //   composite ≈ 0.70 (extreme)  → ~9.0
-  const target01 = sigmoid01(adjusted, 5.5, 0.30) * conf;
+  // ---- 8. Sigmoid → 0..10 ----------------------------------------------
+  const target01 = sigmoid01(adjusted, 6.0, 0.28) * conf;
   const targetScore = target01 * 10;
 
-  // ---- 6. Temporal stability — symmetric EMA + dead-band ----------------
-  // Anti-randomness: if the new target is within ±0.25 of the previous
-  // score, hold the previous value. Removes constant micro-fluctuation
-  // while the user holds a still face.
+  // ---- 9. Fast attack / slow release + dead-band -----------------------
+  // Going UP: respond fast (alpha 0.55) so weird faces are felt instantly.
+  // Going DOWN: ease out (alpha 0.18) so brief still-frames don't crash
+  // the score. Tiny moves under ±0.20 hold the previous value.
   let score: number;
   const diff = targetScore - prevScore;
-  if (Math.abs(diff) < 0.25) {
+  if (Math.abs(diff) < 0.20) {
     score = prevScore;
   } else {
-    // EMA, alpha 0.25 (per spec). Limit per-frame jump so big swings still
-    // feel reactive but never teleport.
-    const alpha = 0.25;
-    const maxJump = 1.5;
+    const alpha = diff > 0 ? 0.55 : 0.18;
+    const maxJump = diff > 0 ? 3.0 : 1.2;
     const clampedDelta = Math.max(-maxJump, Math.min(maxJump, diff));
     score = prevScore + alpha * clampedDelta;
   }
