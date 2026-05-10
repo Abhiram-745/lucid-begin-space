@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronLeft, CircleHelp, Trophy, User, X } from "lucide-react";
+import { ChevronLeft, CircleHelp, Trophy, User, X, Gamepad2, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 
 type LobbyCardProps = {
@@ -292,6 +292,19 @@ export default function Arena() {
       extra: <PlayerRankCard featured />,
     },
     {
+      icon: <Gamepad2 className="h-16 w-16 text-rose-300/70" strokeWidth={1.4} />,
+      title: "Customs",
+      subtitle: "Host Tournaments or 1v1s",
+      accent: "bg-[radial-gradient(circle_at_50%_75%,rgba(244,63,94,0.12),transparent_46%)]",
+      hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(244,63,94,0.78),rgba(244,114,182,0.3)_42%,rgba(244,63,94,0.08)_70%,transparent_84%)]",
+      hoverBorder: "hover:border-rose-400/90 hover:shadow-[0_0_76px_rgba(244,63,94,0.28),inset_0_1px_0_rgba(255,255,255,0.12)]",
+      extra: (
+        <span className="absolute right-4 top-4 z-20 rounded-full border border-rose-400/55 bg-rose-500/30 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.5)]">
+          ● New
+        </span>
+      ),
+    },
+    {
       icon: <User className="h-16 w-16 fill-sky-300/35 text-sky-300/55" strokeWidth={1.5} />,
       title: "The Lab",
       subtitle: "Solo Calibration",
@@ -309,7 +322,7 @@ export default function Arena() {
       <div className="absolute inset-0 opacity-[0.04] [background-image:linear-gradient(rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:44px_44px]" />
 
       <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[min(1640px,100%)] min-w-0 flex-col px-3 pt-3 pb-8 sm:px-8 sm:pt-6 sm:pb-10 lg:h-full lg:min-h-0 lg:px-12 lg:py-6">
-        <div className="flex h-12 shrink-0 items-center justify-between gap-3 sm:h-14">
+        <div className="relative flex h-12 shrink-0 items-center justify-between gap-3 sm:h-14">
           <Link
             href="/"
             className="inline-flex h-9 items-center gap-2 rounded-full border border-white/12 bg-white/6 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-white/78 shadow-[0_0_24px_rgba(255,255,255,0.03),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md transition hover:border-white/22 hover:text-white sm:h-11 sm:px-4 sm:text-xs"
@@ -317,6 +330,21 @@ export default function Arena() {
             <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Back
           </Link>
+
+          {/* Center: Season + Roobet stack */}
+          <div className="absolute left-1/2 top-0 hidden -translate-x-1/2 flex-col items-center gap-2 md:flex">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/55 bg-amber-950/35 px-4 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-amber-200 shadow-[0_0_18px_rgba(251,191,36,0.22)]">
+              🏆 Season 1
+            </div>
+            <a
+              href="https://roobet.com"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-amber-400/65 bg-gradient-to-b from-amber-900/60 to-amber-950 px-5 py-2 text-[12px] font-black uppercase tracking-[0.24em] text-amber-200 shadow-[0_0_28px_rgba(251,191,36,0.35),inset_0_1px_0_rgba(255,224,130,0.3)] transition hover:from-amber-800/70 hover:text-amber-100"
+            >
+              <span className="text-base">🟡</span> Play on Roobet
+            </a>
+          </div>
 
           <button
             onClick={() => setShowHowToUnmog(true)}
@@ -330,11 +358,40 @@ export default function Arena() {
         </div>
 
         <div className="grid min-h-0 flex-1 items-center py-2 sm:py-5 lg:py-7">
-          <div className="grid h-full max-h-[calc(100dvh-5rem)] grid-cols-1 items-stretch gap-3 sm:max-h-[calc(100dvh-7rem)] sm:gap-5 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.08fr)_minmax(0,0.88fr)] lg:gap-7 xl:gap-8">
+          <div className="grid h-full max-h-[calc(100dvh-5rem)] grid-cols-1 items-stretch gap-3 sm:max-h-[calc(100dvh-7rem)] sm:grid-cols-2 sm:gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,0.85fr)_minmax(0,0.85fr)] lg:gap-6 xl:gap-7">
           {panels.map((panel) => (
             <LobbyPanel key={panel.title} {...panel} />
           ))}
           </div>
+        </div>
+
+        {/* Social row */}
+        <div className="grid w-full shrink-0 grid-cols-2 gap-2 pb-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
+          {[
+            { name: "Discord",   sub: "Join the Discord",  href: "https://discord.gg",      icon: "💬", color: "indigo" },
+            { name: "TikTok",    sub: "Follow Unmoggle",    href: "https://tiktok.com",      icon: "🎵", color: "rose" },
+            { name: "Instagram", sub: "Follow Unmoggle",    href: "https://instagram.com",   icon: "📷", color: "fuchsia" },
+            { name: "Reddit",    sub: "Follow Unmoggle",    href: "https://reddit.com",      icon: "👽", color: "orange" },
+            { name: "YouTube",   sub: "Follow Unmoggle",    href: "https://youtube.com",     icon: "▶️", color: "red" },
+            { name: "X / Twitter", sub: "Follow Unmoggle",  href: "https://x.com",           icon: "✕",  color: "zinc" },
+          ].map((s) => (
+            <a
+              key={s.name}
+              href={s.href}
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 backdrop-blur-md transition hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06]"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black/60 text-sm">
+                {s.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[9px] font-black uppercase tracking-[0.18em] text-white/85">{s.name}</div>
+                <div className="truncate text-[10px] text-white/40">{s.sub}</div>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-white/25 transition-transform group-hover:translate-x-0.5" />
+            </a>
+          ))}
         </div>
       </main>
       {showHowToUnmog && <HowToUnmogModal onClose={() => setShowHowToUnmog(false)} />}
