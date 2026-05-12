@@ -347,6 +347,7 @@ export default function Arena() {
       accent: "bg-[radial-gradient(circle_at_50%_75%,rgba(244,63,94,0.12),transparent_46%)]",
       hoverGlow: "bg-[radial-gradient(ellipse_at_bottom,rgba(244,63,94,0.78),rgba(244,114,182,0.3)_42%,rgba(244,63,94,0.08)_70%,transparent_84%)]",
       hoverBorder: "hover:border-rose-400/90 hover:shadow-[0_0_76px_rgba(244,63,94,0.28),inset_0_1px_0_rgba(255,255,255,0.12)]",
+      href: "/tournament",
       extra: (
         <span className="absolute right-4 top-4 z-20 rounded-full border border-rose-400/55 bg-rose-500/30 px-2.5 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-rose-100 shadow-[0_0_14px_rgba(244,63,94,0.5)]">
           ● New
