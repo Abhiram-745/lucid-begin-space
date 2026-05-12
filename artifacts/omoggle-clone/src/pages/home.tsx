@@ -123,8 +123,25 @@ export default function Home() {
           ))}
         </div>
 
+        {/* Tournament Mode CTA */}
+        <div className="mt-8 w-full max-w-5xl">
+          <Link
+            href="/tournament"
+            className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-950/50 via-[#0f0f0f]/85 to-[#0f0f0f]/85 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-fuchsia-400/60 hover:shadow-[0_18px_44px_-12px_rgba(217,70,239,0.45)]"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-fuchsia-500/35 bg-fuchsia-950/45">
+              <Trophy className="h-5 w-5 text-fuchsia-300" strokeWidth={2.2} aria-hidden />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-fuchsia-200/90">Tournament Mode · New</div>
+              <div className="mt-1 text-[12px] text-white/55">Private rooms · KOTH or Group · up to 10 players.</div>
+            </div>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/30 transition-transform group-hover:translate-x-1" strokeWidth={2.5} />
+          </Link>
+        </div>
+
         {/* Secondary CTAs — Leaderboard + Discord */}
-        <div className="mt-8 grid w-full max-w-5xl grid-cols-1 gap-4 sm:mt-10 sm:grid-cols-2">
+        <div className="mt-4 grid w-full max-w-5xl grid-cols-1 gap-4 sm:mt-6 sm:grid-cols-2">
           <Link
             href="/leaderboard"
             className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-950/40 via-[#0f0f0f]/85 to-[#0f0f0f]/85 px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/55 hover:shadow-[0_18px_44px_-12px_rgba(245,158,11,0.45)]"
